@@ -72,6 +72,7 @@ public class NpcScreen extends Screen {
     private int px, py, pw, ph, panelTop, titleY, bodyY, boxH, tbX, tbW, lh, closeIdx;
     private int portraitW;
     private String icon = "";
+    private boolean hasIcon;
     private EditBox nameBox;
 
     public NpcScreen(NpcTalkPayload p) {
@@ -187,7 +188,7 @@ public class NpcScreen extends Screen {
         // retrato: modelo 3D quando ha NPC; guia (ou sem NPC) usa o icone de pixel art
         portraitW = kind == Kind.GUIDE ? 0 : 76;
         tbW = inner - (portraitW > 0 ? portraitW + 8 : 0);
-        boolean hasIcon = !icon.isEmpty();
+        hasIcon = !icon.isEmpty();
         int iconPad = hasIcon ? 34 : 0;
         int textW = tbW - 16 - iconPad;
 

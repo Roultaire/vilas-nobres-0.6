@@ -100,19 +100,21 @@ final class Ui {
     }
 
     /** Icone (pixel art da tela) e cor de cada tema do guia. */
-    private static final Map<String, String[]> GUIDE_STYLE = Map.of(
-        "menu",     new String[]{"Guia do Nobre Vilas", "Livro de conhecimento", "gold",   "livro"},
-        "visao",    new String[]{"O que é o Nobre Vilas", "Introdução",           "gold",   "livro"},
-        "postos",   new String[]{"Postos e Títulos",      "Hierarquia",           "gold",   "coroa"},
-        "familias", new String[]{"Territórios e Famílias","Casas nobres",         "gold",   "estandarte"},
-        "muralhas", new String[]{"Muralhas, Farol e Castelos","Defesa",           "gold",   "torre"},
-        "conquista",new String[]{"Conquista",             "Guerra",               "red",    "espada"},
-        "rebeliao", new String[]{"Rebelião e Império",    "Guerra",               "red",    "espada"},
-        "aliancas", new String[]{"Alianças e Traição",    "Diplomacia",           "aqua",   "pergaminho"},
-        "impostos", new String[]{"Impostos e Moedas",     "Economia",             "green",  "moeda"},
-        "comandos", new String[]{"Comandos úteis",        "Referência",           "gray",   "livro"},
-        "status",   new String[]{"Meu status",            "Ficha",                "aqua",   "pergaminho"},
-        "capital",  new String[]{"A Capital",             "Coração do reino",     "gold",   "coroa"});
+    private static final Map<String, String[]> GUIDE_STYLE = new HashMap<>();
+    static {
+        GUIDE_STYLE.put("menu",      new String[]{"Guia do Nobre Vilas", "Livro de conhecimento", "gold", "livro"});
+        GUIDE_STYLE.put("visao",     new String[]{"O que é o Nobre Vilas", "Introdução", "gold", "livro"});
+        GUIDE_STYLE.put("postos",    new String[]{"Postos e Títulos", "Hierarquia", "gold", "coroa"});
+        GUIDE_STYLE.put("familias",  new String[]{"Territórios e Famílias", "Casas nobres", "gold", "estandarte"});
+        GUIDE_STYLE.put("muralhas",  new String[]{"Muralhas, Farol e Castelos", "Defesa", "gold", "torre"});
+        GUIDE_STYLE.put("conquista", new String[]{"Conquista", "Guerra", "red", "espada"});
+        GUIDE_STYLE.put("rebeliao",  new String[]{"Rebelião e Império", "Guerra", "red", "espada"});
+        GUIDE_STYLE.put("aliancas",  new String[]{"Alianças e Traição", "Diplomacia", "aqua", "pergaminho"});
+        GUIDE_STYLE.put("impostos",  new String[]{"Impostos e Moedas", "Economia", "green", "moeda"});
+        GUIDE_STYLE.put("comandos",  new String[]{"Comandos úteis", "Referência", "gray", "livro"});
+        GUIDE_STYLE.put("status",    new String[]{"Meu status", "Ficha", "aqua", "pergaminho"});
+        GUIDE_STYLE.put("capital",   new String[]{"A Capital", "Coração do reino", "gold", "coroa"});
+    }
 
     static void guide(VillageManager m, ServerPlayer p, String page) {
         String[] st = GUIDE_STYLE.getOrDefault(page, GUIDE_STYLE.get("menu"));
