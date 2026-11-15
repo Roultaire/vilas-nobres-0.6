@@ -204,7 +204,7 @@ public final class VillageManager {
         v.kitBuilt = true;                              // o kit falhou: volta ao muro procedural
         dirty = true;
         NobreVilas.LOG.warn("Capital {}: muralha do kit nao gerou tarefas; usando a muralha procedural.", v.name);
-        queueWall(level, v);
+        v.wallKey = -1;                                 // faz o laco principal refazer o muro procedural
     }
 
     /** A cada ~14 s, um NPC perto do jogador solta uma fala em BALAO acima da cabeca (nunca abre tela). */

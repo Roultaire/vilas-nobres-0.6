@@ -7,8 +7,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
 
 /**
  * Baloes de fala dos NPCs no mundo: aparecem acima da cabeca do mob, seguem ele e somem sozinhos.
@@ -42,55 +42,39 @@ public final class ChatBubble {
     private static void draw(WorldRenderContext ctx) {
         if (LIVE.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null || mc.options.hideGui) return;
+        if (mc.level == null || mc.player == null) return;
         long now = System.currentTimeMillis();
         LIVE.removeIf(b -> now - b.born() > LIFE);
 
         Vec3 cam = ctx.camera().getPosition();
-        Matrix4f mat = ctx.matrixStack().last().pose();
         MultiBufferSource.BufferSource buf = mc.renderBuffers().bufferSource();
         Font font = mc.font;
+        float scale = 0.026f;
 
         for (Bubble b : LIVE) {
             double x = b.x(), y = b.y(), z = b.z();
             // segue o mob enquanto ele existir no mundo
             for (var e : mc.level.entitiesForRendering()) {
                 if (e.getUUID().toString().equals(b.uuid())) {
-                    x = e.getX(); y = e.getY() + e.getBbHeight() + 0.45; z = e.getZ();
+                    x = e.getX(); y = e.getY() + e.getBbHeight() + 0.55; z = e.getZ();
                     break;
                 }
             }
-            float a = 1f;
             long age = now - b.born();
-            if (age > LIFE - 800) a = Math.max(0f, (LIFE - age) / 800f);
+            float a = age > LIFE - 800 ? Math.max(0f, (LIFE - age) / 800f) : 1f;
             int alpha = (int) (a * 255) << 24;
 
             String line = (b.name() == null || b.name().isEmpty()) ? b.text() : b.name() + ": " + b.text();
-            int w = font.width(line);
-            float scale = 0.026f;
-            float px = (float) (x - cam.x), py = (float) (y - cam.y) + 0.35f, pz = (float) (z - cam.z);
+            float px = (float) (x - cam.x), py = (float) (y - cam.y) + 0.30f, pz = (float) (z - cam.z);
 
             ctx.matrixStack().pushPose();
             ctx.matrixStack().translate(px, py, pz);
             ctx.matrixStack().mulPose(ctx.camera().rotation());
             ctx.matrixStack().scale(-scale, -scale, scale);
-            mat = ctx.matrixStack().last().pose();
-
-            // fundo do balao (pergaminho) + borda, em dois quads no mundo
-            int bw = w + 10, bh = 13;
-            float x0 = -bw / 2f, y0 = -bh;
-            float y1 = y0 + bh, x1 = x0 + bw;
-            var vc = buf.getBuffer(net.minecraft.client.renderer.RenderType.textBackgroundSeeThrough());
-            vc.addVertex(mat, x0 - 1, y1 + 1, 0).setColor(0xFFA88A55);
-            vc.addVertex(mat, x1 + 1, y1 + 1, 0).setColor(0xFFA88A55);
-            vc.addVertex(mat, x1 + 1, y0 - 1, 0).setColor(0xFFA88A55);
-            vc.addVertex(mat, x0 - 1, y0 - 1, 0).setColor(0xFFA88A55);
-            vc.addVertex(mat, x0, y1, 0).setColor(bg);
-            vc.addVertex(mat, x1, y1, 0).setColor(bg);
-            vc.addVertex(mat, x1, y0, 0).setColor(bg);
-            vc.addVertex(mat, x0, y0, 0).setColor(bg);
-            font.drawInBatch(line, x0 + 5, y0 + 3, (alpha & 0xFF000000) | 0x00FFF0C0, false, mat, buf,
-                Font.DisplayMode.SEE_THROUGH, 0, 0xF000F0);
+            var mat = ctx.matrixStack().last().pose();
+            float w = font.width(line);
+            font.drawInBatch(Component.literal(line), -w / 2f, 0f, (alpha & 0xFF000000) | 0x00FFF0C0, false,
+                mat, buf, Font.DisplayMode.SEE_THROUGH, (alpha & 0xFF000000), 0xF000F0);
             ctx.matrixStack().popPose();
         }
         buf.endBatch();
