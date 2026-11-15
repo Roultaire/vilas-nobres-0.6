@@ -198,7 +198,7 @@ public final class VillageManager {
         long now = level.getGameTime();
         Long last = kitWait.get(v.id);
         if (last == null) { kitWait.put(v.id, now); return; }
-        if (now - last < 1200) return;                 // ~1 min de paciencia
+        if (now - last < 400) return;                  // ~20 s de paciencia (era 1 min: a capital ficava sem muro)
         kitWait.remove(v.id);
         v.forceKit = false;
         v.kitBuilt = true;                              // o kit falhou: volta ao muro procedural

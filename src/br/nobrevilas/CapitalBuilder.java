@@ -57,6 +57,7 @@ final class CapitalBuilder {
     /** @return lista de tarefas, ou null se algum chunk da area ainda nao esta carregado. */
     static List<Runnable> plan(ServerLevel l, VillageData v) {
         int r = v.radius;
+        boolean dbg = "1".equals(System.getProperty("nobrevilas.debug", "1"));
         // medidas reais das pecas do kit
         int tw = Math.max(1, StructureKit.size(l, "torre", Rotation.NONE)[0]);
         int gw = Math.max(1, StructureKit.size(l, "muralha", Rotation.NONE)[0]);
@@ -64,11 +65,19 @@ final class CapitalBuilder {
         int k = 6;
         while (2 * tw + (k - 1) * gh < 2 * (r + 10) + 2 && k < 12) k++;
         int p = 2 * tw + (k - 1) * gh, half = p / 2;
+        if (dbg) NobreVilas.LOG.info("Capital {}: pecas torre {}x{} muralha {}x{} k={} perimetro {} centro {},{}.", v.name, tw, tw, gw, gh, k, p, v.x, v.z);
+        if (tw <= 1 || gw <= 1 || gh <= 1) {
+            NobreVilas.LOG.warn("Capital {}: estrutura do kit ausente (torre {} / muralha {}x{}).", v.name, tw, gw, gh);
+            return null;
+        }
         int allowed = Math.max(0, Math.min(24, half - r - 6));
         int ext = half + allowed + tw + 4;
         for (int dx = -ext; dx <= ext + 15; dx += 16)
             for (int dz = -ext; dz <= ext + 15; dz += 16)
-                if (!l.hasChunkAt(new BlockPos(v.x + Math.min(dx, ext), 64, v.z + Math.min(dz, ext)))) return null;
+                if (!l.hasChunkAt(new BlockPos(v.x + Math.min(dx, ext), 64, v.z + Math.min(dz, ext)))) {
+                    if (dbg) NobreVilas.LOG.info("Capital {}: chunk faltando em {},{}.", v.name, v.x + Math.min(dx, ext), v.z + Math.min(dz, ext));
+                    return null;
+                }
 
         int bx = 0, bz = 0;
         double best = Double.MAX_VALUE;

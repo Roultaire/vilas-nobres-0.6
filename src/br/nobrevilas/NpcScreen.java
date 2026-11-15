@@ -200,10 +200,7 @@ public class NpcScreen extends Screen {
         int textBoxH = 12 + (histLines.isEmpty() ? 0 : histLines.size() * lh + 6) + (showTitle() ? lh + 2 : 0) + bodyLines.size() * lh + 10;
         int maxBox = Math.max(60, this.height - 150);
         boxH = kind == Kind.GUIDE ? Math.max(textBoxH, 44) : Math.max(textBoxH, 118);
-        if (boxH > maxBox) {                      // fala longa: limita a caixa e rola o texto
-            boxH = maxBox;
-            bodyLines = bodyLines.subList(0, Math.min(bodyLines.size(), Math.max(1, (boxH - 40) / lh)));
-        }
+        if (boxH > maxBox) boxH = maxBox;         // fala longa: a caixa para de crescer (texto fica contido)
 
         boolean needBox = false;
         for (String[] o : opts) if (o[1].contains("$(nome)")) needBox = true;
@@ -252,6 +249,10 @@ public class NpcScreen extends Screen {
     // ───────────── livro aberto de fundo ─────────────
     private static final int PARCH = 0xFFE8D5A9, PARCH_D = 0xFFCBB077, PARCH_S = 0xFFA88A55,
         LEATHER = 0xFF6B3F1D, LEATHER_D = 0xFF4A2A11, RIBBON = 0xFF8E1F1F;
+    // ── tema do DIALOGO (madeira e pergaminho; o guia e que usa o livro) ──
+    private static final int W_OAK = 0xFF8A6134, W_OAK_D = 0xFF5D3F1F, W_OAK_L = 0xFFA87B47,
+        W_GRAIN = 0xFF6E4B26, BRASS = 0xFFC9A227, BRASS_D = 0xFF8A6C12,
+        PAPER = 0xFFF3E7C8, PAPER_D = 0xFFDCC9A0, INK = 0xFF2A2115, INK_DIM = 0xFF5A4A33;
 
     /** Livro aberto atras da conversa: capa, duas paginas de pergaminho, lombada e fitas. */
     private void drawOpenBook(GuiGraphicsExtractor g) {
@@ -283,6 +284,35 @@ public class NpcScreen extends Screen {
         // fitas marcadoras
         g.fill(bx + half - 14, by - 3, bx + half - 8, by + 26, RIBBON);
         g.fill(bx + half + 8, by + bh - 26, bx + half + 14, by + bh + 3, RIBBON);
+    }
+
+    /** Painel do DIALOGO: tabua de madeira com rebites, pergaminho da fala e fita de pergaminho nos botoes. */
+    private void drawTalkPanel(GuiGraphicsExtractor g) {
+        int t = 8;
+        // tabua de madeira com veio e rebites
+        g.fill(px - 4, panelTop - 4, px + pw + 4, panelTop + ph + 4, W_OAK_D);
+        g.fill(px, panelTop, px + pw, panelTop + ph, W_OAK);
+        for (int y = panelTop + 3; y < panelTop + ph - 2; y += 6) g.fill(px + 2, y, px + pw - 2, y + 1, W_GRAIN);
+        g.outline(px, panelTop, pw, ph, W_OAK_D);
+        g.outline(px + 2, panelTop + 2, pw - 4, ph - 4, W_OAK_L);
+        for (int[] c : new int[][]{{px + 5, panelTop + 5}, {px + pw - 9, panelTop + 5}, {px + 5, panelTop + ph - 9}, {px + pw - 9, panelTop + ph - 9}}) {
+            g.fill(c[0], c[1], c[0] + 4, c[1] + 4, BRASS);
+            g.fill(c[0] + 1, c[1] + 1, c[0] + 3, c[1] + 3, BRASS_D);
+        }
+        // pergaminho da fala
+        int bx0 = px + t + 8, by0 = titleY + 36 + 8;
+        int w = pw - 2 * t - 16;
+        g.fill(bx0 - 2, by0 - 2, bx0 + w + 2, by0 + boxH + 2, PAPER_D);
+        g.fill(bx0, by0, bx0 + w, by0 + boxH, PAPER);
+        // cantos do pergaminho queimados
+        for (int i = 0; i < 8; i++) {
+            g.fill(bx0 + i, by0, bx0 + i + 1, by0 + 1, PAPER_D);
+            g.fill(bx0 + w - 1 - i, by0 + boxH - 1, bx0 + w - i, by0 + boxH, PAPER_D);
+        }
+        // placa de nome de madeira (por cima da tela toda)
+        g.fill(px + pw / 2 - 130, panelTop + 2, px + pw / 2 + 130, panelTop + 38, W_OAK_D);
+        g.fill(px + pw / 2 - 128, panelTop + 4, px + pw / 2 + 128, panelTop + 36, W_OAK_L);
+        g.outline(px + pw / 2 - 128, panelTop + 4, 256, 32, BRASS_D);
     }
 
     // ───────────── desenho ─────────────
@@ -391,14 +421,17 @@ public class NpcScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        // fundo escurecido + livro aberto de fundo (a conversa acontece sobre as paginas)
+        // fundo escurecido: o guia usa o livro aberto; a conversa usa o painel de madeira novo
         g.fill(0, 0, this.width, this.height, 0x99000000);
-        drawOpenBook(g);
+        if (kind == Kind.GUIDE) drawOpenBook(g);
+        else drawTalkPanel(g);
         super.extractRenderState(g, mouseX, mouseY, delta);
         int t = 8;
         int cx = px + pw / 2;
 
-        // moldura de pedra com musgo e rebites
+        if (kind != Kind.GUIDE) { drawTalkBody(g, mouseX, mouseY); return; }
+
+        // moldura de pedra com musgo e rebites (so o guia)
         stone(g, px, panelTop, pw, ph, 8, 16, 1);
         g.fill(px + t, panelTop + t, px + pw - t, panelTop + ph - t, DARK);
         g.outline(px + t, panelTop + t, pw - 2 * t, ph - 2 * t, GOLD_D);
@@ -469,5 +502,52 @@ public class NpcScreen extends Screen {
         int by = panelTop + ph - 6;
         g.fill(cx - 22, by - 1, cx + 22, by, GOLD_D);
         for (int i = 0; i < 4; i++) g.fill(cx - 3 + i, by - 4 + i, cx + 3 - i, by - 3 + i, GOLD);
+    }
+
+    /** Conteudo do DIALOGO: retrato, pergaminho com a fala e botoes de madeira (nada de pedra). */
+    private void drawTalkBody(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        int t = 8, cx = px + pw / 2;
+        int plateX = px + pw / 2 - 128, plateY = panelTop + 4, plateW = 256;
+        String n = fit(name, plateW - 16);
+        g.text(this.font, n, cx - this.font.width(n) / 2 + 1, plateY + 7, 0xFF3A2611, false);
+        g.text(this.font, n, cx - this.font.width(n) / 2, plateY + 6, 0xFFFBEFC9, false);
+        String r = fit("— " + role + " —", plateW - 16);
+        g.text(this.font, r, cx - this.font.width(r) / 2, plateY + 20, 0xFFE6CF9E, false);
+        if (hasIcon) art(g, iconArt(), cx - 17, py - 1, 3);
+
+        // retrato em moldura de latão
+        if (portraitW > 0) {
+            int ptx = px + t + 8;
+            g.fill(ptx - 1, bodyY - 1, ptx + portraitW + 1, bodyY + 89, BRASS_D);
+            g.fill(ptx, bodyY, ptx + portraitW, bodyY + 88, 0xFF241B10);
+            drawEntity3D(g, ptx + 3, bodyY + 3, ptx + portraitW - 3, bodyY + 85, 34);
+            g.fill(ptx, bodyY + 92, ptx + portraitW, bodyY + 118, W_OAK_D);
+            g.text(this.font, "Profissão:", ptx + 6, bodyY + 96, 0xFFD8C089, false);
+            g.text(this.font, fit(profession(), portraitW - 12), ptx + 6, bodyY + 107, 0xFFFBEFC9, false);
+        }
+
+        // pergaminho da fala (texto escuro sobre papel)
+        int tx = tbX + 10;
+        int y = bodyY + 8;
+        for (String l : histLines) { g.text(this.font, l, tx, y, 0xFF8A7854, false); y += lh; }
+        if (!histLines.isEmpty()) { g.fill(tx, y + 1, tbX + tbW - 10, y + 2, PAPER_D); y += 6; }
+        if (showTitle()) { g.text(this.font, title, tx, y, 0xFF7A5210, false); y += lh + 2; }
+        for (String l : bodyLines) { g.text(this.font, l, tx, y, INK, false); y += lh; }
+
+        // botoes: tabua com borda de latao
+        for (int i = 0; i < optRects.size(); i++) {
+            int[] b = optRects.get(i);
+            boolean close = i == closeIdx;
+            String label = close ? "Encerrar conversa" : opts.get(i)[0];
+            boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
+            g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], hover ? W_OAK_L : W_OAK);
+            g.fill(b[0] + 2, b[1] + 2, b[0] + b[2] - 2, b[1] + 3, W_GRAIN);
+            g.outline(b[0], b[1], b[2], b[3], hover ? BRASS : W_OAK_D);
+            if (hover) g.outline(b[0] + 1, b[1] + 1, b[2] - 2, b[3] - 2, BRASS_D);
+            art(g, iconFor(label, close), b[0] + 8, b[1] + 5, 2);
+            String lab = fit(label, b[2] - 52);
+            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2 + 1, b[1] + 7, 0xFF3A2611, false);
+            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2, b[1] + 6, 0xFFFBEFC9, false);
+        }
     }
 }

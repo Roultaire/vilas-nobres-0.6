@@ -140,7 +140,17 @@ final class Admin {
         v.kitBuilt = false;
         v.forceKit = true;
         m.markDirty();
-        return ok(src, "Muralha do kit agendada em " + v.name + " — posto " + v.seatTier + (v.isCapital() ? " (capital)" : " (NAO e capital: sem posto de Rei a muralha do kit nao e montada)") + ". A obra e feita aos poucos, fique perto.");
+        // plano calculado na hora: o jogador recebe o resultado real, nao uma promessa
+        if (!v.isCapital()) return ok(src, v.name + " nao e capital (posto " + v.seatTier + "): a muralha e a do posto, sem kit.");
+        var plan = CapitalBuilder.plan(m.server().overworld(), v);
+        if (plan == null) {
+            v.forceKit = false;
+            v.kitBuilt = true;
+            v.wallKey = -1;
+            m.markDirty();
+            return fail(src, "O kit nao pode ser montado aqui (chunk longe ou estrutura ausente). Voltando para a muralha procedural: fique perto de " + v.name + " que ela aparece.");
+        }
+        return ok(src, "Muralha do kit: " + plan.size() + " tarefas agendadas em " + v.name + ". Fique perto que a obra anda.");
     }
 
     static int castle(CommandSourceStack src) throws CommandSyntaxException {
