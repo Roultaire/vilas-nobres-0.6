@@ -2,7 +2,7 @@ package br.nobrevilas;
 
 /** Salvo em <mundo>/nobrevilas/config.json */
 public class Config {
-    public String guardModId = "guardvillagers";          // mod de aldeoes guerreiros (opcional)
+    public String guardModId = "guardvillagers";          // mod de aldeoes guerreiros (integrado: aldeoes viram guardas)
     public String guardEntity = "guardvillagers:guard";   // entidade usada se o mod estiver instalado
     public String fallbackGuardEntity = "minecraft:iron_golem";
     public String currencyItem = "minecraft:emerald";   // qualquer item (inclusive de outros mods): moeda do mundo

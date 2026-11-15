@@ -140,7 +140,7 @@ final class Admin {
         v.kitBuilt = false;
         v.forceKit = true;
         m.markDirty();
-        return ok(src, "Muralha do kit agendada em " + v.name + " (fique perto: os chunks da area precisam estar carregados). A obra e feita aos poucos.");
+        return ok(src, "Muralha do kit agendada em " + v.name + " — posto " + v.seatTier + (v.isCapital() ? " (capital)" : " (NAO e capital: sem posto de Rei a muralha do kit nao e montada)") + ". A obra e feita aos poucos, fique perto.");
     }
 
     static int castle(CommandSourceStack src) throws CommandSyntaxException {

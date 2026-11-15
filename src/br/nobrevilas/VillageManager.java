@@ -395,6 +395,30 @@ public final class VillageManager {
         }
         v.garrisonSpawned = true;
         dirty = true;
+        convertVillagers(level, v);
+    }
+
+    /**
+     * Integracao com o Guard Villagers: os aldeoes sem profissao da vila viram guardas da guarnicao,
+     * herdam o posto do senhor (equipamento) e passam a ser do Nobre Vilas (mesmas tags do capitao).
+     */
+    private void convertVillagers(ServerLevel level, VillageData v) {
+        if (!Integrations.loaded(cfg.guardModId)) return;
+        int tier = tierOf(v);
+        String tags = "\"nv_garrison\",\"nv_v_" + v.id + "\",\"nv_militia\"";
+        int converted = 0;
+        for (Entity e : level.getEntities((Entity) null, new net.minecraft.world.phys.AABB(
+                v.x - v.radius - 16, -64, v.z - v.radius - 16, v.x + v.radius + 16, 320, v.z + v.radius + 16),
+                en -> en.getType().toString().contains("villager") && !(en.getType().toString().contains("zombie")))) {
+            if (converted >= 8) break;
+            if (!e.getTags().isEmpty() && e.getTags().contains("nv_garrison")) continue;
+            String u = e.getUUID().toString();
+            run("data merge entity " + u + " {Profession:\"minecraft:none\",PersistenceRequired:1b}");
+            run("execute as " + u + " run summon " + guardEntity() + " ~ ~ ~ {Tags:[" + tags + "],PersistenceRequired:1b}");
+            run("kill " + u);
+            converted++;
+        }
+        if (converted > 0) NobreVilas.LOG.info("Vila {}: {} aldeoes viraram guardas.", v.name, converted);
     }
 
     /** Se o capitao sumiu (morto, chunk perdido), a guarnicao e refeita inteira. */
@@ -652,6 +676,8 @@ public final class VillageManager {
                 boolean kitWanted = v.isCapital() && (v.kitBuilt || v.forceKit || cfg.autoCapitalKit);
                 if (!heavy && kitWanted && !v.kitBuilt && jobs.isEmpty() && near) {
                     var plan = CapitalBuilder.plan(level, v);
+                    if (plan == null) NobreVilas.LOG.warn("Capital {}: area ainda nao carregada; tentando de novo.", v.name);
+                    else NobreVilas.LOG.info("Capital {}: {} tarefas de construcao agendadas.", v.name, plan.size());
                     if (plan != null) {
                         jobs.addAll(plan);
                         jobs.add(() -> {
