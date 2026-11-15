@@ -235,6 +235,7 @@ public class NpcScreen extends Screen {
     /** true depois de clicar numa opcao: a tela so fecha quando o servidor mandar (nunca sozinha). */
     private boolean holding;
     private int bx, by2, bwid, bhei, leftX, rightX, pageWid, pageNo;
+    private int[] closeRect, prevRect, nextRect;
     private List<String> titleLines = new ArrayList<>();
     private int px, py, pw, ph, panelTop, titleY, bodyY, boxH, tbX, tbW, lh, closeIdx;
     private int portraitW;
@@ -414,12 +415,10 @@ public class NpcScreen extends Screen {
         int by = panelTop + pad + 20;
         for (String[] o : opts) {
             final String cmd = o[1];
-            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(optX, by, optW, btnH).build());
             optRects.add(new int[]{optX, by, optW, btnH});
             by += btnH + btnGap;
         }
         closeIdx = optRects.size();
-        this.addRenderableWidget(Button.builder(Component.literal("Encerrar conversa"), b -> this.onClose()).bounds(optX, by, optW, btnH).build());
         optRects.add(new int[]{optX, by, optW, btnH});
 
         boolean needBox = false;
@@ -436,36 +435,62 @@ public class NpcScreen extends Screen {
     // ───────────── LIVRO DO GUIA ─────────────
     /** Layout do livro: duas páginas lado a lado, com setas e numeração. */
     private void initBook() {
-        int bw = Math.min(560, this.width - 40);
-        int bh = Math.min(320, this.height - 60);
+        int bw = Math.min(620, this.width - 40);
+        int bh = Math.min(360, this.height - 60);
         bx = (this.width - bw) / 2;
         by2 = (this.height - bh) / 2;
         bwid = bw;
         bhei = bh;
-        int pageW = (bw - 28) / 2;
-        leftX = bx + 14;
-        rightX = bx + 14 + pageW + 8;
-        pageWid = pageW - 8;
-        int tby = by2 + bh - 34;
-        // setas de virar pagina + fechar
-        this.addRenderableWidget(Button.builder(Component.literal("<"), b -> page(-1)).bounds(bx + 6, tby, 20, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal(">"), b -> page(1)).bounds(bx + bw - 26, tby, 20, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal("Fechar"), b -> { holding = false; this.onClose(); }).bounds(bx + bw / 2 - 30, tby, 60, 20).build());
-        // categorias da pagina esquerda
-        int cy = by2 + 40;
-        int ch = 20;
+        int pageW = (bw - 44) / 2;
+        leftX = bx + 16;
+        rightX = bx + 16 + pageW + 12;
+        pageWid = pageW;
+        // categorias: retangulos desenhados por nos (nada de botao padrao do jogo)
+        int cy = by2 + 46;
+        int ch = 21;
         for (String[] o : opts) {
-            final String cmd = o[1];
-            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(leftX + 6, cy, pageWid - 4, ch).build());
-            optRects.add(new int[]{leftX + 6, cy, pageWid - 4, ch});
-            cy += ch + 2;
+            optRects.add(new int[]{leftX + 8, cy, pageW - 12, ch});
+            cy += ch;
         }
         closeIdx = -1;
-        bodyLines = wrap(body, pageWid - 16);
-        titleLines = wrap(title, pageWid - 16);
+        closeRect = new int[]{bx + bwid / 2 - 34, by2 + bhei - 26, 68, 18};
+        prevRect = new int[]{bx + 10, by2 + bhei - 26, 18, 18};
+        nextRect = new int[]{bx + bwid - 28, by2 + bhei - 26, 18, 18};
+        bodyLines = wrap(body, pageWid - 24);
+        titleLines = wrap(title, pageWid - 24);
     }
 
     private void page(int d) { pageNo = Math.max(0, pageNo + d); }
+
+    @Override
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent ev, boolean doubled) {
+        if (kind == Kind.GUIDE) {
+            int mx = (int) this.minecraft.mouseHandler.xpos() * this.width / this.minecraft.getWindow().getScreenWidth();
+            int my = (int) this.minecraft.mouseHandler.ypos() * this.height / this.minecraft.getWindow().getScreenHeight();
+            if (hit(closeRect, mx, my)) { this.minecraft.setScreenAndShow(null); return true; }
+            if (hit(prevRect, mx, my)) { page(-1); return true; }
+            if (hit(nextRect, mx, my)) { page(1); return true; }
+            for (int i = 0; i < optRects.size(); i++) {
+                if (hit(optRects.get(i), mx, my)) { click(opts.get(i)[1]); return true; }
+            }
+            return true;                     // clique no livro nunca fecha a tela
+        }
+        // dialogo: opcoes e "encerrar" sao clicadas por posicao (a tela so fecha no Encerrar)
+        int mx = (int) this.minecraft.mouseHandler.xpos() * this.width / this.minecraft.getWindow().getScreenWidth();
+        int my = (int) this.minecraft.mouseHandler.ypos() * this.height / this.minecraft.getWindow().getScreenHeight();
+        for (int i = 0; i < optRects.size(); i++) {
+            if (hit(optRects.get(i), mx, my)) {
+                if (i == closeIdx) { holding = false; this.minecraft.setScreenAndShow(null); }
+                else click(opts.get(i)[1]);
+                return true;
+            }
+        }
+        return super.mouseClicked(ev, doubled);
+    }
+
+    private static boolean hit(int[] r, int x, int y) {
+        return r != null && x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
+    }
 
     @Override
     public void onClose() {
@@ -687,7 +712,6 @@ public class NpcScreen extends Screen {
         if (kind == Kind.GUIDE) {
             drawBackdrop(g);
             g.fill(0, 0, this.width, this.height, 0x99000000);
-            super.extractRenderState(g, mouseX, mouseY, delta);
             drawBook(g, mouseX, mouseY);
             return;
         } else {
@@ -761,9 +785,24 @@ public class NpcScreen extends Screen {
             }
             g.text(this.font, lab, lx0 + 20, ly2, hover ? 0xFF3A1E08 : 0xFF4A3A24, false);
         }
-        // numeração e rodapé
+        // controles desenhados: setas e fechar (nada de botão padrão do jogo)
+        bookButton(g, prevRect, "<", mouseX, mouseY);
+        bookButton(g, nextRect, ">", mouseX, mouseY);
+        bookButton(g, closeRect, "Fechar", mouseX, mouseY);
+        // numeração das páginas
         String pg = (pageNo * 2 + 1) + " · " + (pageNo * 2 + 2);
-        g.text(this.font, pg, cx - this.font.width(pg) / 2, by2 + bhei - 20, 0xFFD8C089, false);
+        g.text(this.font, pg, cx - this.font.width(pg) / 2, by2 + bhei - 22, 0xFFD8C089, false);
+    }
+
+    /** Botão do livro: pergaminho com borda dourada, desenhado à mão (sem widget do jogo). */
+    private void bookButton(GuiGraphicsExtractor g, int[] r, String label, int mx, int my) {
+        if (r == null) return;
+        boolean hover = hit(r, mx, my);
+        g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], hover ? 0xFF8C6A12 : 0xFF5A4410);
+        g.fill(r[0] + 1, r[1] + 1, r[0] + r[2] - 1, r[1] + r[3] - 1, hover ? 0xFFE8D7AE : 0xFFD8C089);
+        int tw = this.font.width(label);
+        g.text(this.font, label, r[0] + (r[2] - tw) / 2, r[1] + (r[3] - this.font.lineHeight) / 2 + 1,
+                hover ? 0xFF3A1E08 : 0xFF4A3A24, false);
     }
 
     private void drawTalkBody(GuiGraphicsExtractor g, int mouseX, int mouseY) {
