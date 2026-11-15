@@ -399,26 +399,30 @@ public final class VillageManager {
     }
 
     /**
-     * Integracao com o Guard Villagers: os aldeoes sem profissao da vila viram guardas da guarnicao,
-     * herdam o posto do senhor (equipamento) e passam a ser do Nobre Vilas (mesmas tags do capitao).
+     * Integracao com o Villager Guards (datapack-mod): os aldeoes da vila viram guardas de verdade do mod
+     * (esqueleto invisivel com armadura e arma, IA do proprio mod) e entram na guarnicao do Nobre Vilas.
+     * Usa as funcoes publicas do datapack: villager_guards:guard/{swordman,archer}/spawn.
      */
     private void convertVillagers(ServerLevel level, VillageData v) {
-        if (!Integrations.loaded(cfg.guardModId)) return;
+        if (!Integrations.loaded(cfg.guardModId) || !cfg.useVillagerGuards) return;
         int tier = tierOf(v);
-        String tags = "\"nv_garrison\",\"nv_v_" + v.id + "\",\"nv_militia\"";
+        String tags = "\"nv_guards\",\"nv_v_" + v.id + "\"";
         int converted = 0;
         for (Entity e : level.getEntities((Entity) null, new net.minecraft.world.phys.AABB(
                 v.x - v.radius - 16, -64, v.z - v.radius - 16, v.x + v.radius + 16, 320, v.z + v.radius + 16),
-                en -> en.getType().toString().contains("villager") && !(en.getType().toString().contains("zombie")))) {
+                en -> en.getType().toString().contains("villager") && !en.getType().toString().contains("zombie"))) {
             if (converted >= 8) break;
-            if (e.entityTags().contains("nv_garrison")) continue;
+            if (e.entityTags().contains("villager_guards.guard") || e.entityTags().contains("nv_guards")) continue;
             String u = e.getUUID().toString();
-            run("data merge entity " + u + " {Profession:\"minecraft:none\",PersistenceRequired:1b}");
-            run("execute as " + u + " run summon " + guardEntity() + " ~ ~ ~ {Tags:[" + tags + "],PersistenceRequired:1b}");
-            run("kill " + u);
+            boolean archer = converted % 3 == 2;
+            // 1) a funcao do mod transforma o aldeao no guarda (mesma posicao, IA e equipamento do mod)
+            run("execute as " + u + " at @s run function villager_guards:guard/" + (archer ? "archer" : "swordman") + "/spawn");
+            // 2) marca o guarda recem-criado como soldado desta vila
+            run("execute as @e[tag=villager_guards.guard,tag=!nv_guards,distance=..4,sort=nearest,limit=1] run tag @s add nv_guards");
+            run("execute as @e[tag=villager_guards.guard,tag=!nv_v_" + v.id + ",distance=..4,sort=nearest,limit=1] run tag @s add nv_v_" + v.id);
             converted++;
         }
-        if (converted > 0) NobreVilas.LOG.info("Vila {}: {} aldeoes viraram guardas.", v.name, converted);
+        if (converted > 0) NobreVilas.LOG.info("Vila {}: {} aldeoes viraram guardas (Villager Guards).", v.name, converted);
     }
 
     /** Se o capitao sumiu (morto, chunk perdido), a guarnicao e refeita inteira. */

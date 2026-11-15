@@ -34,7 +34,8 @@ final class Soldiers {
         String head = (t >= 4 && t < 7) ? "diamond" : mat;            // elite: elmo de diamante
         String weapon = archer ? "crossbow" : t >= 9 ? "netherite_sword" : t >= 7 ? "diamond_sword" : "iron_sword";
         int hp = captain ? 80 : 40 + tier * 2;
-        {
+        boolean modGuard = m.guardEntity().contains("skeleton");   // Villager Guards cuida da armadura/invisibilidade
+        if (!modGuard) {
             nbt.append(",equipment:{head:").append(it(head + "_helmet"))
                 .append(",chest:").append(it(mat + "_chestplate"))
                 .append(",legs:").append(it(mat + "_leggings"))

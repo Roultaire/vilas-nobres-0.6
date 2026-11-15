@@ -2,9 +2,10 @@ package br.nobrevilas;
 
 /** Salvo em <mundo>/nobrevilas/config.json */
 public class Config {
-    public String guardModId = "guardvillagers";          // mod de aldeoes guerreiros (integrado: aldeoes viram guardas)
-    public String guardEntity = "guardvillagers:guard";   // entidade usada se o mod estiver instalado
+    public String guardModId = "mr_villager_guards";      // Villager Guards (datapack-mod 26.3): aldeoes viram guardas
+    public String guardEntity = "minecraft:skeleton";     // guarda do Villager Guards (esqueleto invisivel com equipamento)
     public String fallbackGuardEntity = "minecraft:iron_golem";
+    public boolean useVillagerGuards = true;               // aldeoes da vila viram guardas do Villager Guards
     public String currencyItem = "minecraft:emerald";   // qualquer item (inclusive de outros mods): moeda do mundo
     public String beaconBase = "minecraft:iron_block";   // base da piramide do farol
     public boolean cheatsEnabled = true;                   // /vila admin (somente criativo/espectador)

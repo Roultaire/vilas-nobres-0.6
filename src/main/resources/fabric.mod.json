@@ -27,6 +27,6 @@
     "guardvillagers": "*"
   },
   "recommends": {
-    "guardvillagers": "*"
+    "mr_villager_guards": "*"
   }
 }
