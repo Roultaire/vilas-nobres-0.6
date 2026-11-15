@@ -30,7 +30,17 @@ processResources {
     filesMatching("fabric.mod.json") { expand "version": inputs.properties.version }
 }
 
+// classe antiga do mixin (br.nobrevilas.ChatBubbleMixin) nao entra mais no jar
+tasks.named('compileJava') {
+    exclude 'br/nobrevilas/ChatBubbleMixin*.class'
+    exclude 'br/nobrevilas/ChatBubbleMixin.java'
+}
+
 tasks.withType(JavaCompile).configureEach { it.options.release = 25 }
+
+tasks.named('jar') {
+    exclude 'br/nobrevilas/ChatBubbleMixin.class'
+}
 
 java {
     withSourcesJar()
