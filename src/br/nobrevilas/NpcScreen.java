@@ -70,10 +70,14 @@ public class NpcScreen extends Screen {
 
     /** Texturas que ja falharam: nao tentamos de novo (evita desenhar lixo na tela). */
     private static final java.util.Set<Identifier> TEX_BAD = new java.util.HashSet<>();
+    /** Tamanho real de cada PNG (lido do próprio arquivo) — base do 9-slice e do fundo. */
+    private static final java.util.Map<Identifier, Integer> TEX_W = new java.util.HashMap<>();
+    private static final java.util.Map<Identifier, Integer> TEX_H = new java.util.HashMap<>();
 
     /** Textura esticada; se o arquivo nao existir, desliga essa textura e o desenho por cor assume. */
     private void tex(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h) {
         if (id == null || TEX_BAD.contains(id)) return;
+        registerSize(id);
         try { g.blit(id, x, y, w, h, 0f, 0f, 1f, 1f); }
         catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
     }
@@ -82,21 +86,68 @@ public class NpcScreen extends Screen {
      * Fatiamento em 9 partes: os cantos ficam do tamanho do PNG, as bordas esticam num sentido
      * e o centro estica nos dois. Serve para paineis e botoes de qualquer tamanho.
      */
+    /**
+     * 9-slice com recorte de verdade: o canto é a fatia real do PNG, e as bordas/centro se
+     * repetem (nunca esticam), então o desenho fica nítido em qualquer tamanho de painel.
+     */
     private void nine(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, int b) {
-        if (id == null || b <= 0 || w < 2 * b || h < 2 * b) { tex(g, id, x, y, w, h); return; }
-        int iw = b, ih = b;
-        // cantos
-        tex(g, id, x, y, iw, ih);
-        tex(g, id, x + w - iw, y, iw, ih);
-        tex(g, id, x, y + h - ih, iw, ih);
-        tex(g, id, x + w - iw, y + h - ih, iw, ih);
-        // bordas
-        tex(g, id, x + iw, y, w - 2 * iw, ih);
-        tex(g, id, x + iw, y + h - ih, w - 2 * iw, ih);
-        tex(g, id, x, y + ih, iw, h - 2 * ih);
-        tex(g, id, x + w - iw, y + ih, iw, h - 2 * ih);
-        // centro
-        tex(g, id, x + iw, y + ih, w - 2 * iw, h - 2 * ih);
+        if (id == null || TEX_BAD.contains(id)) return;
+        registerSize(id);
+        int iw = TEX_W.getOrDefault(id, 32), ih = TEX_H.getOrDefault(id, 32);
+        if (b <= 0 || w < 2 * b || h < 2 * b || iw < 2 * b || ih < 2 * b) { tex(g, id, x, y, w, h); return; }
+        float u0 = b / (float) iw, v0 = b / (float) ih;
+        float u1 = (iw - b) / (float) iw, v1 = (ih - b) / (float) ih;
+        // cantos (fatia exata)
+        slice(g, id, x, y, b, b, 0f, 0f, u0, v0);
+        slice(g, id, x + w - b, y, b, b, u1, 0f, 1f, v0);
+        slice(g, id, x, y + h - b, b, b, 0f, v1, u0, 1f);
+        slice(g, id, x + w - b, y + h - b, b, b, u1, v1, 1f, 1f);
+        // bordas: repetem em blocos de b
+        for (int cx = x + b; cx < x + w - b; cx += b) {
+            int cw = Math.min(b, x + w - b - cx);
+            float uu = u0 + (u1 - u0) * (cw / (float) b);
+            slice(g, id, cx, y, cw, b, u0, 0f, uu, v0);
+            slice(g, id, cx, y + h - b, cw, b, u0, v1, uu, 1f);
+        }
+        for (int cy = y + b; cy < y + h - b; cy += b) {
+            int ch = Math.min(b, y + h - b - cy);
+            float vv = v0 + (v1 - v0) * (ch / (float) b);
+            slice(g, id, x, cy, b, ch, 0f, v0, u0, vv);
+            slice(g, id, x + w - b, cy, b, ch, u1, v0, 1f, vv);
+        }
+        // centro repetido
+        for (int cx = x + b; cx < x + w - b; cx += b) {
+            int cw = Math.min(b, x + w - b - cx);
+            float uu = u0 + (u1 - u0) * (cw / (float) b);
+            for (int cy = y + b; cy < y + h - b; cy += b) {
+                int ch = Math.min(b, y + h - b - cy);
+                float vv = v0 + (v1 - v0) * (ch / (float) b);
+                slice(g, id, cx, cy, cw, ch, u0, v0, uu, vv);
+            }
+        }
+    }
+
+    /** Le a largura/altura real do PNG (uma vez por textura) para o 9-slice e o fundo. */
+    private static void registerSize(Identifier id) {
+        if (TEX_W.containsKey(id)) return;
+        try {
+            var res = net.minecraft.client.Minecraft.getInstance().getResourceManager()
+                    .getResource(net.minecraft.resources.Identifier.fromNamespaceAndPath(id.getNamespace(), "textures/" + id.getPath() + ".png"));
+            try (var in = res.orElseThrow().open()) {
+                byte[] b = in.readAllBytes();                    // PNG: largura/altura no cabecalho IHDR
+                int w = ((b[16] & 0xFF) << 24) | ((b[17] & 0xFF) << 16) | ((b[18] & 0xFF) << 8) | (b[19] & 0xFF);
+                int h = ((b[20] & 0xFF) << 24) | ((b[21] & 0xFF) << 16) | ((b[22] & 0xFF) << 8) | (b[23] & 0xFF);
+                TEX_W.put(id, w);
+                TEX_H.put(id, h);
+            }
+        } catch (Throwable t) { TEX_W.put(id, 32); TEX_H.put(id, 32); }
+    }
+
+    /** Desenha uma fatia do PNG em coordenadas UV 0..1. */
+    private void slice(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, float u0, float v0, float u1, float v1) {
+        if (w <= 0 || h <= 0) return;
+        try { g.blit(id, x, y, w, h, u0, v0, u1, v1); }
+        catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
     }
 
     private enum Kind { GUIDE, ROYAL, NOBLE, GUARD, TRADER, VILLAGER }
@@ -394,8 +445,14 @@ public class NpcScreen extends Screen {
         Identifier bg = skin().backdrop();
         if (bg != null && !TEX_BAD.contains(bg)) {
             int before = TEX_BAD.size();
-            tex(g, bg, 0, 0, this.width, this.height);
-            if (TEX_BAD.size() == before) return;         // desenhou a arte
+            int srcW = TEX_W.getOrDefault(bg, 576), srcH = TEX_H.getOrDefault(bg, 324);
+            float scale = Math.max(this.width / (float) srcW, this.height / (float) srcH);
+            int dw = Math.round(srcW * scale), dh = Math.round(srcH * scale);
+            tex(g, bg, (this.width - dw) / 2, (this.height - dh) / 2, dw, dh);
+            if (TEX_BAD.size() == before) {                     // desenhou a arte
+                g.fill(0, 0, this.width, this.height, kind == Kind.GUIDE ? 0x44000000 : 0x33000000);
+                return;
+            }
         }
         // fallback: noite com brilho no centro (nunca fica chapado)
         for (int y = 0; y < this.height; y += 4) {
