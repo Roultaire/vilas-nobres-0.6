@@ -103,9 +103,9 @@ final class CapitalBuilder {
         for (int i = 0; i < m; i++) {
             Inst in = ring.get(i);
             if (!in.name().equals("muralha") || in.idx() != k / 2) continue;
-            gateAt = i;   // primeiro segmento central de cada lado; o lado sul vem depois na ordem
+            if (gateAt < 0) gateAt = i;
+            ring.set(i, new Inst("portao", in.rot(), in.minX(), in.minZ(), in.w(), in.d(), in.side(), in.idx()));
         }
-        if (gateAt >= 0) { Inst g = ring.get(gateAt); ring.set(gateAt, new Inst("portao", g.rot(), g.minX(), g.minZ(), g.w(), g.d(), g.side(), g.idx())); }
 
         // alturas: nunca abaixo do terreno medio de cada peca e com degrau maximo de 1 entre vizinhas
         int[] y = new int[m];

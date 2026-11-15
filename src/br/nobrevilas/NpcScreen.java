@@ -36,6 +36,7 @@ public class NpcScreen extends Screen {
         PAL['S'] = 0xFFB9B3A6; PAL['s'] = 0xFF7A7468; PAL['K'] = 0xFF1A140C; PAL['P'] = 0xFFEBDDB4; PAL['p'] = 0xFFBFA974;
         PAL['B'] = 0xFF7A4A21; PAL['N'] = 0xFFC38A62; PAL['n'] = 0xFF8F5D3C; PAL['H'] = 0xFF3F2616; PAL['W'] = 0xFFF4F4F4;
         PAL['E'] = 0xFF2FA33A; PAL['A'] = 0xFF4CAF50; PAL['U'] = 0xFF2E5FA3; PAL['u'] = 0xFF1E3F73; PAL['M'] = 0xFF6A2C91;
+        PAL['C'] = 0xFF7FD4E8; PAL['L'] = 0xFF3A2C1A; PAL['V'] = 0xFFB03A2E; PAL['X'] = 0xFFD8D2C4; PAL['T'] = 0xFF56606B;
     }
 
     // ───────────── icones (pixel art) ─────────────
@@ -47,6 +48,13 @@ public class NpcScreen extends Screen {
     private static final String[] CASTLE = {"S.S.S.S", "SSSSSSS", "SsSsSsS", "SSSKSSS", "SSKKKSS", "SSKKKSS"};
     private static final String[] TROPHY = {"GGGGGGG", "GGGGGGG", ".GGGGG.", "..GGG..", "...g...", "..ggg.."};
     private static final String[] BOOK = {"BBBBBBBBBBB", "BPPPPBPPPPB", "BPpppBpppPB", "BPPPPBPPPPB", "BPpppBpppPB", "BPPPPBPPPPB", "BBBBBBBBBBB"};
+    // icones do guia (pixel art, 9x9)
+    private static final String[] I_CROWN = {"G...G...G", "GG.GGG.GG", "GGGGGGGGG", "GgGGGGGgG", "GGGGGGGGG", ".GGGGGGG.", "..GgGgG..", "..GGGGG..", "...ggg..."};
+    private static final String[] I_TOWER = {"SSSSSSSSS", "SsSsSsSsS", "SSSSSSSSS", ".SSSSSSS.", ".SSKSSSS.", ".SSSSKSS.", ".SSKSSSS.", ".SSSSKSS.", ".SSSSSSS."};
+    private static final String[] I_SWORD = {"......GGS", ".....GGS.", "....GGS..", "...GGS...", "..GGS....", ".SGGS....", "SGG.S....", "GG.......", "G........"};
+    private static final String[] I_COIN  = {".GGGGGGG.", "GGgGGGgGG", "GgGgGgGgG", "GGgGGGgGG", "GGGgGgGGG", "GGgGGGgGG", "GgGgGgGgG", "GGgGGGgGG", ".GGGGGGG."};
+    private static final String[] I_SCROLL= {"LLLLLLLLL", "LXXXXXXXL", "LXxxxxxXL", "LXXXXXXXL", "LXxxxxxXL", "LXXXXXXXL", "LXxxxxxXL", "LXXXXXXXL", "LLLLLLLLL"};
+    private static final String[] I_FLAG  = {"LLLLLLLLL", "LVVVVVVV.", "LVVVVVVV.", "LVVVVGVVV", "LVVVVVVV.", "LVVVVVVV.", "LL.......", "LL.......", "LL......."};
 
     private static final List<String> HIST = new ArrayList<>();
     private static String lastKey = "";
@@ -63,6 +71,7 @@ public class NpcScreen extends Screen {
     private final List<int[]> optRects = new ArrayList<>();        // x, y, w, h
     private int px, py, pw, ph, panelTop, titleY, bodyY, boxH, tbX, tbW, lh, closeIdx;
     private int portraitW;
+    private String icon = "";
     private EditBox nameBox;
 
     public NpcScreen(NpcTalkPayload p) {
@@ -90,6 +99,7 @@ public class NpcScreen extends Screen {
         role = h.length > 1 ? h[1] : "";
         title = h.length > 3 ? h[3] : "";
         body = p.body();
+        icon = h.length > 5 ? h[5] : "";
         entityUuid = entity == null ? "" : entity;
         opts.clear();
         for (String e : p.options().split("\u0002", -1)) {
@@ -174,9 +184,11 @@ public class NpcScreen extends Screen {
         px = (this.width - pw) / 2;
         int t = 8;
         int inner = pw - 2 * t - 16;
+        // retrato: modelo 3D quando ha NPC; guia (ou sem NPC) usa o icone de pixel art
         portraitW = kind == Kind.GUIDE ? 0 : 76;
         tbW = inner - (portraitW > 0 ? portraitW + 8 : 0);
-        int iconPad = kind == Kind.GUIDE ? 34 : 0;
+        boolean hasIcon = !icon.isEmpty();
+        int iconPad = hasIcon ? 34 : 0;
         int textW = tbW - 16 - iconPad;
 
         histLines = new ArrayList<>();
@@ -185,7 +197,12 @@ public class NpcScreen extends Screen {
         bodyLines = wrap(body, textW);
 
         int textBoxH = 12 + (histLines.isEmpty() ? 0 : histLines.size() * lh + 6) + (showTitle() ? lh + 2 : 0) + bodyLines.size() * lh + 10;
+        int maxBox = Math.max(60, this.height - 150);
         boxH = kind == Kind.GUIDE ? Math.max(textBoxH, 44) : Math.max(textBoxH, 118);
+        if (boxH > maxBox) {                      // fala longa: limita a caixa e rola o texto
+            boxH = maxBox;
+            bodyLines = bodyLines.subList(0, Math.min(bodyLines.size(), Math.max(1, (boxH - 40) / lh)));
+        }
 
         boolean needBox = false;
         for (String[] o : opts) if (o[1].contains("$(nome)")) needBox = true;
@@ -232,6 +249,19 @@ public class NpcScreen extends Screen {
     public boolean isPauseScreen() { return false; }
 
     // ───────────── desenho ─────────────
+    /** Pixel art do icone pedido pelo servidor (guia). */
+    private String[] iconArt() {
+        return switch (icon) {
+            case "coroa" -> I_CROWN;
+            case "torre" -> I_TOWER;
+            case "espada" -> I_SWORD;
+            case "moeda" -> I_COIN;
+            case "pergaminho" -> I_SCROLL;
+            case "estandarte" -> I_FLAG;
+            default -> BOOK;
+        };
+    }
+
     private void art(GuiGraphicsExtractor g, String[] rows, int x, int y, int s) {
         for (int r = 0; r < rows.length; r++) {
             String row = rows[r];
@@ -355,7 +385,8 @@ public class NpcScreen extends Screen {
         g.text(this.font, r, cx - this.font.width(r) / 2, titleY + 21, TEXT, false);
 
         // ornamento superior
-        if (kind == Kind.GUIDE) art(g, BOOK, cx - 17, py - 1, 3);
+        if (hasIcon) art(g, iconArt(), cx - 17, py - 1, 3);
+        else if (kind == Kind.GUIDE) art(g, BOOK, cx - 17, py - 1, 3);
         else art(g, CROWN, cx - 11, py, 3);
 
         // retrato + profissao

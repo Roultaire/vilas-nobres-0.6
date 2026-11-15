@@ -46,10 +46,13 @@ final class VilaCommand {
                     .then(Commands.argument("pagina", StringArgumentType.word())
                         .executes(c -> Ui.guide(c.getSource(), StringArgumentType.getString(c, "pagina")))))
                 .then(Commands.literal("falar")
-                    .then(Commands.argument("alvo", StringArgumentType.word())
-                        .executes(c -> Ui.talk(c.getSource(), StringArgumentType.getString(c, "alvo"), "menu"))
-                        .then(Commands.argument("topico", StringArgumentType.word())
-                            .executes(c -> Ui.talk(c.getSource(), StringArgumentType.getString(c, "alvo"), StringArgumentType.getString(c, "topico")))))))
+                    .then(Commands.argument("alvo", StringArgumentType.greedyString())
+                        .executes(c -> {
+                            String a = StringArgumentType.getString(c, "alvo");
+                            int bar = a.indexOf('/');
+                            return bar < 0 ? Ui.talk(c.getSource(), a, "menu")
+                                           : Ui.talk(c.getSource(), a.substring(0, bar), a.substring(bar + 1));
+                        }))))
             .then(Commands.literal("admin").requires(Admin::allowed)
                 .then(Commands.literal("subir").executes(c -> Admin.adjust(c.getSource(), 1))
                     .then(Commands.argument("n", IntegerArgumentType.integer(1, 10))

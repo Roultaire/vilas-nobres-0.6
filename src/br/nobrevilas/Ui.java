@@ -33,10 +33,14 @@ final class Ui {
     }
 
     // quem esta falando (preenchido antes de montar cada dialogo)
-    private static String spName = "Guia do Nobre Vilas", spRole = "Livro de conhecimento", spColor = "gold", spEntityUuid = "";
+    private static String spName = "Guia do Nobre Vilas", spRole = "Livro de conhecimento", spColor = "gold", spEntityUuid = "", spIcon = "";
 
-    private static void speaker(String n, String r, String c) { spName = n; spRole = r; spColor = c; spEntityUuid = ""; }
-    private static void speaker(String n, String r, String c, String uuid) { spName = n; spRole = r; spColor = c; spEntityUuid = uuid == null ? "" : uuid; }
+    private static void speaker(String n, String r, String c) { spName = n; spRole = r; spColor = c; spEntityUuid = ""; spIcon = ""; }
+    private static void speaker(String n, String r, String c, String uuid) { spName = n; spRole = r; spColor = c; spEntityUuid = uuid == null ? "" : uuid; spIcon = ""; }
+    /** Com icone de pixel art (usado pelo guia, que nao tem NPC para mostrar em 3D). */
+    private static void speaker(String n, String r, String c, String uuid, String icon) {
+        spName = n; spRole = r; spColor = c; spEntityUuid = uuid == null ? "" : uuid; spIcon = icon == null ? "" : icon;
+    }
 
     static void show(VillageManager m, ServerPlayer p, String title, String color, String body, String inputs, List<Btn> actions) {
         if (ServerPlayNetworking.canSend(p, NpcTalkPayload.TYPE)) {          // cliente com o mod: tela propria de conversa
@@ -69,7 +73,7 @@ final class Ui {
             if (opts.length() > 0) opts.append('\u0002');
             opts.append(b.label()).append('\u0001').append(b.cmd());
         }
-        String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color;
+        String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color + "\u0001" + spIcon;
         String uuid = lastSent.getOrDefault(p.getUUID(), "");
         String marker = !uuid.isEmpty() && uuid.equals(spEntityUuid) ? NpcTalkPayload.KEEP : spEntityUuid;
         lastSent.put(p.getUUID(), spEntityUuid);
@@ -95,20 +99,46 @@ final class Ui {
         return 1;
     }
 
+    /** Icone (pixel art da tela) e cor de cada tema do guia. */
+    private static final Map<String, String[]> GUIDE_STYLE = Map.of(
+        "menu",     new String[]{"Guia do Nobre Vilas", "Livro de conhecimento", "gold",   "livro"},
+        "visao",    new String[]{"O que é o Nobre Vilas", "Introdução",           "gold",   "livro"},
+        "postos",   new String[]{"Postos e Títulos",      "Hierarquia",           "gold",   "coroa"},
+        "familias", new String[]{"Territórios e Famílias","Casas nobres",         "gold",   "estandarte"},
+        "muralhas", new String[]{"Muralhas, Farol e Castelos","Defesa",           "gold",   "torre"},
+        "conquista",new String[]{"Conquista",             "Guerra",               "red",    "espada"},
+        "rebeliao", new String[]{"Rebelião e Império",    "Guerra",               "red",    "espada"},
+        "aliancas", new String[]{"Alianças e Traição",    "Diplomacia",           "aqua",   "pergaminho"},
+        "impostos", new String[]{"Impostos e Moedas",     "Economia",             "green",  "moeda"},
+        "comandos", new String[]{"Comandos úteis",        "Referência",           "gray",   "livro"},
+        "status",   new String[]{"Meu status",            "Ficha",                "aqua",   "pergaminho"},
+        "capital",  new String[]{"A Capital",             "Coração do reino",     "gold",   "coroa"});
+
     static void guide(VillageManager m, ServerPlayer p, String page) {
-        speaker("Guia do Nobre Vilas", "Livro de conhecimento", "gold");
+        String[] st = GUIDE_STYLE.getOrDefault(page, GUIDE_STYLE.get("menu"));
+        speaker(st[0], st[1], st[2], "", st[3]);
         Btn back = b("‹ Voltar ao guia", "vila ui guia menu");
         switch (page) {
             case "visao" -> show(m, p, "O que é o Nobre Vilas", "gold",
-                "O mundo ganha uma sociedade feudal. Cada vila tem nome, tipo (Portuária ou Colonial), uma família nobre, um governante que mora na mansão, soldados e muralhas.\n\nVocê começa como plebeu e pode conquistar vilas, subir de posto, firmar alianças, romper com reis e até virar Imperador.\n\nAperte N olhando para um NPC para conversar; N no ar abre este guia.", List.of(back));
+                "◆ O MUNDO\nO mundo ganha uma sociedade feudal. Cada vila tem nome, tipo (Portuária ou Colonial), uma família nobre, um governante na mansão, soldados e muralhas.\n\n"
+                + "◆ VOCÊ\nComeça como plebeu e pode conquistar vilas, subir de posto, firmar alianças, romper com reis e até virar Imperador.\n\n"
+                + "◆ COMO JOGAR\n• N olhando para um NPC → conversa\n• N no ar → este guia\n• /vila info → detalhes da vila onde você está", List.of(back));
             case "postos" -> show(m, p, "Postos e Títulos", "gold",
-                "Plebeu → Cavaleiro → Barão → Visconde → Conde → Marquês → Duque → Arquiduque → Príncipe → Rei → Imperador.\n\nSeu posto sobe com o número de vilas:\n1 Cavaleiro · 2 Barão · 3 Visconde · 5 Conde · 7 Marquês · 10 Duque · 14 Arquiduque · 19 Príncipe.\n\nRei só rompendo com o reino (Duque ou mais). Imperador tomando a capital do reino antigo.", List.of(back));
+                "◆ A ESCADA\nPlebeu → Cavaleiro → Barão → Visconde → Conde → Marquês → Duque → Arquiduque → Príncipe → Rei → Imperador\n\n"
+                + "◆ VILAS NECESSÁRIAS\n1 Cavaleiro · 2 Barão · 3 Visconde · 5 Conde · 7 Marquês · 10 Duque · 14 Arquiduque · 19 Príncipe\n\n"
+                + "◆ REGRAS\nRei: só rompendo com o reino (Duque ou mais).\nImperador: tomando a capital do reino antigo.", List.of(back));
             case "familias" -> show(m, p, "Territórios e Famílias", "gold",
-                "Vila → Condado → Marquesado → Ducado → Principado → Reino.\n\nCada reino tem uma Casa Real. O rei tem uma rainha consorte da mesma casa; os príncipes são da casa real; duques podem ser ramos dela; condes e marqueses têm casas próprias.\n\nA primeira vila descoberta de cada território vira a sede dele; a do reino é a Capital.", List.of(back));
+                "◆ OS TERRITÓRIOS\nVila → Condado → Marquesado → Ducado → Principado → Reino\n\n"
+                + "◆ AS CASAS\nCada reino tem uma Casa Real: o rei e a rainha consorte são dela, os príncipes também; duques podem ser ramos da casa; condes e marqueses têm casas próprias.\n\n"
+                + "◆ AS SEDES\nA primeira vila descoberta de cada território vira a sede dele. A do reino é a Capital.", List.of(back));
             case "muralhas" -> show(m, p, "Muralhas, Farol e Castelos", "gold",
-                "Um farol com feixe de luz marca cada vila (ciano = portuária, laranja = colonial).\n\nA muralha evolui com o posto de quem governa: madeira, pedra, tijolos, deepslate, blackstone e quartzo. A capital do reino tem a muralha mais forte e um castelo.\n\nSoldados equipados guardam a vila: o equipamento melhora com o posto.", List.of(back));
+                "◆ O FAROL\nUm feixe de luz marca cada vila: ciano = portuária, laranja = colonial.\n\n"
+                + "◆ A MURALHA\nEvolui com o posto de quem governa: madeira, pedra, tijolos, deepslate, blackstone, quartzo.\nA capital do reino tem muralha de pedra escura com torres de canto e portão no meio de cada lado — ela aparece sozinha quando você chega a 300 blocos do centro.\n\n"
+                + "◆ O CASTELO E A GUARDA\nA capital também ganha castelo. Os soldados equipam melhor conforme o posto do senhor.", List.of(back));
             case "conquista" -> show(m, p, "Conquista", "red",
-                "O governante mora na mansão (ou no castelo). Ataque-o: os soldados da vila o defendem. Se ele cair, a vila é sua.\n\nRegra: você só ataca governantes de até 1 posto acima do seu.\n\nPara saber se pode atacar alguém, aperte N olhando para ele e escolha 'Desafiar o governante'.", List.of(back));
+                "◆ COMO TOMAR UMA VILA\nO governante mora na mansão (ou no castelo). Ataque-o: os soldados o defendem. Se ele cair, a vila é sua.\n\n"
+                + "◆ LIMITE\nVocê só ataca governantes de até 1 posto acima do seu.\n\n"
+                + "◆ NA PRÁTICA\nAperte N olhando para ele e escolha “Desafiar o governante”.", List.of(back));
             case "rebeliao" -> show(m, p, "Rebelião e Império", "red",
                 "Com posto de Duque ou mais, fale com um governante (N) e escolha 'Romper com o reino'. Dê um nome ao seu novo reino e vire Rei.\n\nTodas as vilas do reino antigo marcham contra você. Para acabar com a guerra, tome a Capital do reino antigo: você vira Imperador e o reino antigo passa ao seu império.", List.of(back));
             case "aliancas" -> show(m, p, "Alianças e Traição", "aqua",
@@ -116,10 +146,12 @@ final class Ui {
             case "impostos" -> show(m, p, "Impostos e Moedas", "green",
                 "Todo dia de jogo você recebe impostos das suas vilas, de 5 a 100 moedas conforme o posto, +10% por vila extra.\n\nA moeda padrão é a esmeralda, e pode ser trocada no config.json por um item de outro mod.\n\nConquistas também rendem espólios.", List.of(back));
             case "comandos" -> show(m, p, "Comandos úteis", "gray",
-                "/vila info · detalhes da vila\n/vila localizar · vila mais próxima\n/vila lista · vilas visitadas\n/vila rastrear · bússola de vilas\n/vila rank · ranking\n/vila status · seu posto\n/vila livro · livro-guia\n\nA maioria das ações também está nos diálogos (tecla N).", List.of(back));
+                "◆ VILA\n/vila info · detalhes da vila\n/vila localizar · vila mais próxima\n/vila lista · vilas visitadas\n/vila rastrear · bússola de vilas\n/vila rank · ranking\n/vila status · seu posto\n/vila livro · livro-guia\n\n"
+                + "◆ ADMIN (criativo)\n/vila admin subir · descer\n/vila admin capital · monta a muralha da capital\n/vila admin castelo · refaz o castelo\n/vila socorro · refaz as guarnições\n\n"
+                + "A maioria das ações também está nos diálogos (tecla N).", List.of(back));
             case "status" -> status(m, p, "vila ui guia menu");
             default -> show(m, p, "Guia do Nobre Vilas", "gold",
-                "Escolha um tema. Dica: aperte N olhando para um NPC para conversar com ele.",
+                "Bem-vindo ao Nobre Vilas. Escolha um tema abaixo.\n\nDica: aperte N olhando para um NPC para conversar com ele; N no ar abre este guia.",
                 List.of(b("O que é o Nobre Vilas", "vila ui guia visao"), b("Postos e Títulos", "vila ui guia postos"),
                     b("Territórios e Famílias", "vila ui guia familias"), b("Muralhas, Farol e Castelos", "vila ui guia muralhas"),
                     b("Conquista", "vila ui guia conquista"), b("Rebelião e Império", "vila ui guia rebeliao"),
@@ -151,10 +183,16 @@ final class Ui {
         VillageManager m = NobreVilas.manager();
         Entity e = null;
         try { e = m.server().overworld().getEntity(UUID.fromString(alvo)); } catch (IllegalArgumentException ignored) {}
-        // sem entidade por perto: quando o assunto nao e "menu" e uma fala de fundo (vida da vila), mostra so o balao
+        // sem entidade por perto: uma fala de fundo ("idle") ainda aparece; o resto volta ao guia
         if (e == null || e.distanceToSqr(p) > 144.0) {
-            if (!"menu".equals(topic) && "idle".equals(topic)) { idleTalk(m, p, alvo); return 1; }
+            if ("idle".equals(topic)) { idleTalk(m, p, alvo); return 1; }
             guide(m, p, "menu");
+            return 1;
+        }
+        // NPC que nao conversa (ovelha, cavalo...): so uma linha de sistema, sem abrir a tela
+        String tipo = e.getType().toString();
+        if (!tipo.contains("villager") && !tipo.contains("iron_golem")) {
+            p.sendSystemMessage(Component.literal("§7" + mobLabel(e) + " não fala com forasteiros."));
             return 1;
         }
 
@@ -185,9 +223,6 @@ final class Ui {
             speaker("Golem de " + v.name, "Protetor da vila", "gray", u);
             m.freeze(e, p);
             commoner(m, p, v, u, topic);
-        } else {
-            // cavalos, ovelhas, porcos... nao conversam: fala nenhuma, nenhuma tela
-            p.sendSystemMessage(Component.literal("§7Este " + mobLabel(e) + " não fala com forasteiros."));
         }
         return 1;
     }
