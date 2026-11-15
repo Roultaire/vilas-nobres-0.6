@@ -27,7 +27,7 @@ final class VilaCommand {
             .then(Commands.literal("rank").executes(c -> rank(c.getSource())))
             .then(Commands.literal("status").executes(c -> status(c.getSource())))
             .then(Commands.literal("livro").executes(c -> { Book.give(NobreVilas.manager(), c.getSource().getPlayerOrException()); return 1; }))
-            .then(Commands.literal("socorro").requires(c -> c.hasPermission(2))
+            .then(Commands.literal("socorro").requires(Admin::allowed)
                 .executes(c -> {
                     int n = NobreVilas.manager().respawnGarrisons();
                     c.getSource().sendSuccess(() -> Component.literal("§6Guarnições refeitas em " + n + " vila(s)."), false);
