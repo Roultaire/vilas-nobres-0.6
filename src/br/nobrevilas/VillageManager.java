@@ -203,7 +203,7 @@ public final class VillageManager {
             if (nearby.isEmpty()) continue;
             Entity who = nearby.get(idleRnd.nextInt(nearby.size()));
             if (frozenUntil.containsKey(who.getUUID())) continue;
-            if (who.getTags() != null && who.getTags().toString().contains("villager_guards")) continue;
+            if (who.entityTags().toString().contains("nv_guards")) continue;
             lastIdle = now;
             String u = who.getUUID().toString();
             if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p, NpcIdlePayload.TYPE)) continue;
