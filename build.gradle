@@ -17,7 +17,7 @@ dependencies {
 // Layout padrao: codigo em src/br/nobrevilas e recursos em src/main/resources
 sourceSets {
     main {
-        java { srcDirs = ['src/main/java', 'src'] }
+        java { srcDirs = ['src'] }
         resources { srcDirs = ['src/main/resources'] }
     }
 }
