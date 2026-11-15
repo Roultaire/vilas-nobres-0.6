@@ -38,6 +38,7 @@ public class NpcScreen extends Screen {
     //  então faça o PNG do botão com o canto já desenhado (ex.: 32x32, canto de 8px).
     // ══════════════════════════════════════════════════════════════════════════
     record Skin(
+        Identifier backdrop,     // IMAGEM DE FUNDO da tela inteira (a arte do castelo)
         Identifier panel,        // fundo do painel (esticado)
         Identifier button,       // botão normal (fatiado em 9)
         Identifier buttonHover,  // botão com o mouse em cima
@@ -54,11 +55,11 @@ public class NpcScreen extends Screen {
 
     /** Texturas do painel/botões por tipo de tela. Troque o nome do PNG aqui. */
     private static final Skin SKIN_TALK = new Skin(
-        tex("panel_talk.png"), tex("button_talk.png"), tex("button_talk_hover.png"), tex("button_talk_down.png"),
+        tex("bg_talk.png"), tex("panel_talk.png"), tex("button_talk.png"), tex("button_talk_hover.png"), tex("button_talk_down.png"),
         tex("plate.png"), tex("paper.png"), 8, 0xFFFBEFC9, 0xFF5A4A33, 0xFF8A6C12);
 
     private static final Skin SKIN_GUIDE = new Skin(
-        tex("panel_guide.png"), tex("button_guide.png"), tex("button_guide_hover.png"), tex("button_guide_down.png"),
+        tex("bg_guide.png"), tex("panel_guide.png"), tex("button_guide.png"), tex("button_guide_hover.png"), tex("button_guide_down.png"),
         tex("plate.png"), tex("paper.png"), 8, 0xFFF0E6D2, 0xFF8F8470, 0xFFF2CF5A);
 
     /** Cores de texto por tipo (troque aqui se quiser texto escuro sobre papel). */
@@ -303,7 +304,8 @@ public class NpcScreen extends Screen {
         for (String[] o : opts) if (o[1].contains("$(nome)")) needBox = true;
 
         int nBtn = opts.size() + 1;
-        int total = 12 + t + 36 + 8 + boxH + 10 + nBtn * 25 + 6 + t + (needBox ? 26 : 0);
+        int btnH = 24, btnGap = 4;
+        int total = 12 + t + 36 + 8 + boxH + 10 + nBtn * (btnH + btnGap) + 6 + t + (needBox ? 26 : 0);
         py = Math.max(2, (this.height - total) / 2);
         panelTop = py + 12;
         titleY = panelTop + t;
@@ -313,14 +315,14 @@ public class NpcScreen extends Screen {
         int bx = px + t + 8;
         for (String[] o : opts) {
             final String cmd = o[1];
-            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(bx, by, inner, 22).build());
-            optRects.add(new int[]{bx, by, inner, 22});
-            by += 25;
+            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(bx, by, inner, btnH).build());
+            optRects.add(new int[]{bx, by, inner, btnH});
+            by += btnH + btnGap;
         }
         closeIdx = optRects.size();
-        this.addRenderableWidget(Button.builder(Component.literal("Encerrar conversa"), b -> this.onClose()).bounds(bx, by, inner, 22).build());
-        optRects.add(new int[]{bx, by, inner, 22});
-        by += 25;
+        this.addRenderableWidget(Button.builder(Component.literal("Encerrar conversa"), b -> this.onClose()).bounds(bx, by, inner, btnH).build());
+        optRects.add(new int[]{bx, by, inner, btnH});
+        by += btnH + btnGap;
         ph = (by + 6 + t) - panelTop;
         if (needBox) {
             nameBox = new EditBox(this.font, px, panelTop + ph + 6, pw, 20, Component.literal("Nome do reino"));
@@ -381,6 +383,13 @@ public class NpcScreen extends Screen {
         // fitas marcadoras
         g.fill(bx + half - 14, by - 3, bx + half - 8, by + 26, RIBBON);
         g.fill(bx + half + 8, by + bh - 26, bx + half + 14, by + bh + 3, RIBBON);
+    }
+
+    /** Arte de fundo: cobre a tela inteira mantendo a proporção (corta o excedente). */
+    private void drawBackdrop(GuiGraphicsExtractor g) {
+        Identifier bg = skin().backdrop();
+        if (bg == null) return;
+        try { g.blit(bg, 0, 0, this.width, this.height, 0f, 0f, 1f, 1f); } catch (Throwable ignored) { }
     }
 
     /** Painel do DIALOGO: tabua de madeira com rebites, pergaminho da fala e fita de pergaminho nos botoes. */
@@ -515,9 +524,10 @@ public class NpcScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        // fundo escurecido: o guia usa o livro aberto; a conversa usa o painel de madeira novo
-        g.fill(0, 0, this.width, this.height, 0x99000000);
-        drawTalkPanel(g);                       // mesmo painel para guia e dialogo (sem livro de fundo)
+        // imagem de fundo da tela inteira (arte do castelo) + escurecimento para o texto respirar
+        drawBackdrop(g);
+        g.fill(0, 0, this.width, this.height, kind == Kind.GUIDE ? 0x77000000 : 0x55000000);
+        drawTalkPanel(g);
         super.extractRenderState(g, mouseX, mouseY, delta);
         int t = 8;
         int cx = px + pw / 2;
@@ -643,8 +653,10 @@ public class NpcScreen extends Screen {
             if (!hover) g.outline(b[0], b[1], b[2], b[3], W_OAK_D);
             art(g, iconFor(label, close), b[0] + 8, b[1] + 5, 2);
             String lab = fit(label, b[2] - 52);
-            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2 + 1, b[1] + 7, 0xFF3A2611, false);
-            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2, b[1] + 6, 0xFFFBEFC9, false);
+            int lx = b[0] + (b[2] - this.font.width(lab)) / 2;
+            int ly = b[1] + (b[3] - this.font.lineHeight) / 2;
+            g.text(this.font, lab, lx + 1, ly + 1, 0xFF1A1208, false);                       // sombra
+            g.text(this.font, lab, lx, ly, hover ? 0xFFFFE9A8 : 0xFFF3E7C8, false);          // texto
         }
     }
 }
