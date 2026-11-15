@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.EntityHitResult;
@@ -24,7 +25,88 @@ import org.joml.Vector3f;
  * a arte e pintada por cima deles.
  */
 public class NpcScreen extends Screen {
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  TEMA DAS TELAS  —  tudo o que você quer mudar fica AQUI (troque os PNGs)
+    //
+    //  Para cada tipo de tela existe uma "skin": as texturas do painel de fundo
+    //  e dos botões (normal, hover, pressionado) e as cores do texto.
+    //  Os PNGs ficam em:  src/main/resources/assets/nobrevilas/textures/gui/
+    //
+    //  Regra de tamanho: o painel é esticado para caber (pode ser fino);
+    //  os botões são fatiados em 9 partes (cantos fixos + bordas + centro esticado),
+    //  então faça o PNG do botão com o canto já desenhado (ex.: 32x32, canto de 8px).
+    // ══════════════════════════════════════════════════════════════════════════
+    record Skin(
+        Identifier panel,        // fundo do painel (esticado)
+        Identifier button,       // botão normal (fatiado em 9)
+        Identifier buttonHover,  // botão com o mouse em cima
+        Identifier buttonDown,   // botão clicado
+        Identifier plate,        // placa atrás do nome (esticada na horizontal)
+        Identifier paper,        // folha onde vai o texto da fala (esticada)
+        int border,              // espessura do canto no PNG do botão/placa (px)
+        int text, int textDim, int textTitle   // cores de texto AARRGGBB
+    ) {}
+
+    private static Identifier tex(String file) {
+        return Identifier.fromNamespaceAndPath(NobreVilas.MOD_ID, "textures/gui/" + file);
+    }
+
+    /** Texturas do painel/botões por tipo de tela. Troque o nome do PNG aqui. */
+    private static final Skin SKIN_TALK = new Skin(
+        tex("panel_talk.png"), tex("button_talk.png"), tex("button_talk_hover.png"), tex("button_talk_down.png"),
+        tex("plate.png"), tex("paper.png"), 8, 0xFFFBEFC9, 0xFF5A4A33, 0xFF8A6C12);
+
+    private static final Skin SKIN_GUIDE = new Skin(
+        tex("panel_guide.png"), tex("button_guide.png"), tex("button_guide_hover.png"), tex("button_guide_down.png"),
+        tex("plate.png"), tex("paper.png"), 8, 0xFFF0E6D2, 0xFF8F8470, 0xFFF2CF5A);
+
+    /** Cores de texto por tipo (troque aqui se quiser texto escuro sobre papel). */
+    private static int COL_TEXT = 0xFFFBEFC9, COL_DIM = 0xFFD8C089, COL_TITLE = 0xFFFBEFC9, COL_ACCENT = 0xFFC9A227;
+
+    /** Cor de texto escolhida pelo tipo de tela. */
+    private Skin skin() { return kind == Kind.GUIDE ? SKIN_GUIDE : SKIN_TALK; }
+
+    /** Textura esticada; se o arquivo nao existir, o desenho por cor continua (nao quebra nada). */
+    private void tex(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h) {
+        if (id == null) return;
+        try { g.blit(id, x, y, w, h, 0f, 0f, 1f, 1f); } catch (Throwable ignored) { }
+    }
+
+    /**
+     * Fatiamento em 9 partes: os cantos ficam do tamanho do PNG, as bordas esticam num sentido
+     * e o centro estica nos dois. Serve para paineis e botoes de qualquer tamanho.
+     */
+    private void nine(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, int b) {
+        if (id == null || b <= 0 || w < 2 * b || h < 2 * b) { tex(g, id, x, y, w, h); return; }
+        int iw = b, ih = b;
+        // cantos
+        tex(g, id, x, y, iw, ih);
+        tex(g, id, x + w - iw, y, iw, ih);
+        tex(g, id, x, y + h - ih, iw, ih);
+        tex(g, id, x + w - iw, y + h - ih, iw, ih);
+        // bordas
+        tex(g, id, x + iw, y, w - 2 * iw, ih);
+        tex(g, id, x + iw, y + h - ih, w - 2 * iw, ih);
+        tex(g, id, x, y + ih, iw, h - 2 * ih);
+        tex(g, id, x + w - iw, y + ih, iw, h - 2 * ih);
+        // centro
+        tex(g, id, x + iw, y + ih, w - 2 * iw, h - 2 * ih);
+    }
+
     private enum Kind { GUIDE, ROYAL, NOBLE, GUARD, TRADER, VILLAGER }
+
+    @Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        clicking = true;
+        return super.mouseClicked(mx, my, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        clicking = false;
+        return super.mouseReleased(mx, my, button);
+    }
 
     // ───────────── paleta ─────────────
     private static final int MORTAR = 0xFF2B2720, DARK = 0xFF17130E, GOLD = 0xFFD4A21F, GOLD_D = 0xFF8C6A12, GOLD_L = 0xFFF2CF5A,
@@ -73,6 +155,7 @@ public class NpcScreen extends Screen {
     private int portraitW;
     private String icon = "";
     private boolean hasIcon;
+    private boolean clicking;
     private EditBox nameBox;
 
     public NpcScreen(NpcTalkPayload p) {
@@ -312,31 +395,28 @@ public class NpcScreen extends Screen {
 
     /** Painel do DIALOGO: tabua de madeira com rebites, pergaminho da fala e fita de pergaminho nos botoes. */
     private void drawTalkPanel(GuiGraphicsExtractor g) {
-        int t = 8;
-        // tabua de madeira com veio e rebites
+        Skin sk = skin();
+        // base de cor (aparece se o PNG ainda nao existir)
         g.fill(px - 4, panelTop - 4, px + pw + 4, panelTop + ph + 4, W_OAK_D);
-        g.fill(px, panelTop, px + pw, panelTop + ph, W_OAK);
-        for (int y = panelTop + 3; y < panelTop + ph - 2; y += 6) g.fill(px + 2, y, px + pw - 2, y + 1, W_GRAIN);
-        g.outline(px, panelTop, pw, ph, W_OAK_D);
-        g.outline(px + 2, panelTop + 2, pw - 4, ph - 4, W_OAK_L);
-        for (int[] c : new int[][]{{px + 5, panelTop + 5}, {px + pw - 9, panelTop + 5}, {px + 5, panelTop + ph - 9}, {px + pw - 9, panelTop + ph - 9}}) {
-            g.fill(c[0], c[1], c[0] + 4, c[1] + 4, BRASS);
-            g.fill(c[0] + 1, c[1] + 1, c[0] + 3, c[1] + 3, BRASS_D);
+        g.fill(px, panelTop, px + pw, panelTop + ph, kind == Kind.GUIDE ? 0xFF3A3128 : W_OAK);
+        // painel e folha de texto por textura
+        nine(g, sk.panel(), px, panelTop, pw, ph, Math.min(12, Math.max(4, sk.border())));
+        int sheetX = tbX - 2, sheetY = bodyY - 2;
+        tex(g, sk.paper(), sheetX, sheetY, tbW + 4, boxH + 4);
+        // placa do nome por textura
+        int plateWid = 256;
+        nine(g, sk.plate(), px + pw / 2 - plateWid / 2, panelTop + 4, plateWid, 32, sk.border());
+        // veio da madeira e rebites (opcionais: so aparecem se nao houver textura de painel)
+        if (sk.panel() == null) {
+            int t = 8;
+            for (int y = panelTop + 3; y < panelTop + ph - 2; y += 6) g.fill(px + 2, y, px + pw - 2, y + 1, W_GRAIN);
+            g.outline(px, panelTop, pw, ph, W_OAK_D);
+            g.outline(px + 2, panelTop + 2, pw - 4, ph - 4, W_OAK_L);
+            for (int[] c : new int[][]{{px + 5, panelTop + 5}, {px + pw - 9, panelTop + 5}, {px + 5, panelTop + ph - 9}, {px + pw - 9, panelTop + ph - 9}}) {
+                g.fill(c[0], c[1], c[0] + 4, c[1] + 4, BRASS);
+                g.fill(c[0] + 1, c[1] + 1, c[0] + 3, c[1] + 3, BRASS_D);
+            }
         }
-        // pergaminho da fala
-        int bx0 = px + t + 8, by0 = titleY + 36 + 8;
-        int w = pw - 2 * t - 16;
-        g.fill(bx0 - 2, by0 - 2, bx0 + w + 2, by0 + boxH + 2, PAPER_D);
-        g.fill(bx0, by0, bx0 + w, by0 + boxH, PAPER);
-        // cantos do pergaminho queimados
-        for (int i = 0; i < 8; i++) {
-            g.fill(bx0 + i, by0, bx0 + i + 1, by0 + 1, PAPER_D);
-            g.fill(bx0 + w - 1 - i, by0 + boxH - 1, bx0 + w - i, by0 + boxH, PAPER_D);
-        }
-        // placa de nome de madeira (por cima da tela toda)
-        g.fill(px + pw / 2 - 130, panelTop + 2, px + pw / 2 + 130, panelTop + 38, W_OAK_D);
-        g.fill(px + pw / 2 - 128, panelTop + 4, px + pw / 2 + 128, panelTop + 36, W_OAK_L);
-        g.outline(px + pw / 2 - 128, panelTop + 4, 256, 32, BRASS_D);
     }
 
     // ───────────── desenho ─────────────
@@ -476,7 +556,7 @@ public class NpcScreen extends Screen {
         goldBox(g, plateX, titleY, plateW, 36);
         String n = fit(name, plateW - 16);
         g.text(this.font, n, cx - this.font.width(n) / 2 + 1, titleY + 6, SHADOW | 0xFF000000, false);
-        g.text(this.font, n, cx - this.font.width(n) / 2, titleY + 5, GOLD_L, false);
+        g.text(this.font, n, cx - this.font.width(n) / 2, titleY + 5, skin().text(), false);
         String r = fit("— " + role + " —", plateW - 16);
         g.text(this.font, r, cx - this.font.width(r) / 2, titleY + 21, TEXT, false);
 
@@ -552,10 +632,13 @@ public class NpcScreen extends Screen {
         // pergaminho da fala (texto escuro sobre papel)
         int tx = tbX + 10;
         int y = bodyY + 8;
-        for (String l : histLines) { g.text(this.font, l, tx, y, 0xFF8A7854, false); y += lh; }
+        int cDim = skin().paper() != null ? 0xFF8A7854 : COL_DIM;
+        int cInk = skin().paper() != null ? INK : COL_TEXT;
+        int cTitle = skin().paper() != null ? 0xFF7A5210 : COL_TITLE;
+        for (String l : histLines) { g.text(this.font, l, tx, y, cDim, false); y += lh; }
         if (!histLines.isEmpty()) { g.fill(tx, y + 1, tbX + tbW - 10, y + 2, PAPER_D); y += 6; }
-        if (showTitle()) { g.text(this.font, title, tx, y, 0xFF7A5210, false); y += lh + 2; }
-        for (String l : bodyLines) { g.text(this.font, l, tx, y, INK, false); y += lh; }
+        if (showTitle()) { g.text(this.font, title, tx, y, cTitle, false); y += lh + 2; }
+        for (String l : bodyLines) { g.text(this.font, l, tx, y, cInk, false); y += lh; }
 
         // botoes: tabua com borda de latao
         for (int i = 0; i < optRects.size(); i++) {
@@ -563,10 +646,11 @@ public class NpcScreen extends Screen {
             boolean close = i == closeIdx;
             String label = close ? "Encerrar conversa" : opts.get(i)[0];
             boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
-            g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], hover ? W_OAK_L : W_OAK);
-            g.fill(b[0] + 2, b[1] + 2, b[0] + b[2] - 2, b[1] + 3, W_GRAIN);
-            g.outline(b[0], b[1], b[2], b[3], hover ? BRASS : W_OAK_D);
-            if (hover) g.outline(b[0] + 1, b[1] + 1, b[2] - 2, b[3] - 2, BRASS_D);
+            Skin sk = skin();
+            boolean down = hover && this.clicking;
+            g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], hover ? W_OAK_L : W_OAK);       // base de cor
+            nine(g, down ? sk.buttonDown() : hover ? sk.buttonHover() : sk.button(), b[0], b[1], b[2], b[3], sk.border());
+            if (!hover) g.outline(b[0], b[1], b[2], b[3], W_OAK_D);
             art(g, iconFor(label, close), b[0] + 8, b[1] + 5, 2);
             String lab = fit(label, b[2] - 52);
             g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2 + 1, b[1] + 7, 0xFF3A2611, false);
