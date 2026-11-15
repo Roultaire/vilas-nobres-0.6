@@ -146,7 +146,7 @@ public class NpcScreen extends Screen {
     /** Desenha uma fatia do PNG em coordenadas UV 0..1. */
     private void slice(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, float u0, float v0, float u1, float v1) {
         if (w <= 0 || h <= 0) return;
-        try { g.blit(id, x, y, w, h, u0, v0, u1, v1); }
+        try { g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, u0, v0, w, h, u1 - u0, v1 - v0); }
         catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
     }
 
@@ -444,11 +444,12 @@ public class NpcScreen extends Screen {
     private void drawBackdrop(GuiGraphicsExtractor g) {
         Identifier bg = skin().backdrop();
         if (bg != null && !TEX_BAD.contains(bg)) {
+            registerSize(bg);
             int before = TEX_BAD.size();
             int srcW = TEX_W.getOrDefault(bg, 576), srcH = TEX_H.getOrDefault(bg, 324);
             float scale = Math.max(this.width / (float) srcW, this.height / (float) srcH);
             int dw = Math.round(srcW * scale), dh = Math.round(srcH * scale);
-            tex(g, bg, (this.width - dw) / 2, (this.height - dh) / 2, dw, dh);
+            slice(g, bg, (this.width - dw) / 2, (this.height - dh) / 2, dw, dh, 0f, 0f, 1f, 1f);
             if (TEX_BAD.size() == before) {                     // desenhou a arte
                 g.fill(0, 0, this.width, this.height, kind == Kind.GUIDE ? 0x44000000 : 0x33000000);
                 return;
