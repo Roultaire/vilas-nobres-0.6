@@ -146,7 +146,11 @@ public class NpcScreen extends Screen {
     /** Desenha uma fatia do PNG em coordenadas UV 0..1. */
     private void slice(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, float u0, float v0, float u1, float v1) {
         if (w <= 0 || h <= 0) return;
-        try { g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, u0, v0, w, h, u1 - u0, v1 - v0); }
+        // 26.3: blit(pipeline, textura, x, y, u, v, destinoW, destinoH, origemW, origemH, texW, texH)
+        int tw = TEX_W.getOrDefault(id, 32), th = TEX_H.getOrDefault(id, 32);
+        int srcW = Math.max(1, Math.round((u1 - u0) * tw)), srcH = Math.max(1, Math.round((v1 - v0) * th));
+        int srcX = Math.round(u0 * tw), srcY = Math.round(v0 * th);
+        try { g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, (float) srcX, (float) srcY, w, h, srcW, srcH, tw, th); }
         catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
     }
 
