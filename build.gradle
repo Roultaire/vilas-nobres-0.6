@@ -14,13 +14,16 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
-// Layout padrao: codigo em src/br/nobrevilas e recursos em src/main/resources
+// Codigo em src/ (mod) e src/client/java (mixin da HUD), recursos em src/main/resources
 sourceSets {
     main {
         java { srcDirs = ['src'] }
         resources { srcDirs = ['src/main/resources'] }
     }
 }
+
+// o mixin do cliente vive no mesmo sourceSet main (entra no jar unico)
+tasks.named('compileJava') { source 'src/client/java' }
 
 processResources {
     inputs.property "version", project.version

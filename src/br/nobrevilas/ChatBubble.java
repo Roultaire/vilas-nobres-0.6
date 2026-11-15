@@ -2,81 +2,70 @@ package br.nobrevilas;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
  * Baloes de fala dos NPCs no mundo: aparecem acima da cabeca do mob, seguem ele e somem sozinhos.
- * Nunca abrem tela nem pausam o gameplay.
+ * Nao abrem tela, nao pausam nada: e so uma legenda flutuante no HUD, presa ao NPC.
+ * (Nao usa APIs de renderizacao do Fabric porque o pacote muda entre versoes; o HUD e estavel.)
  */
 public final class ChatBubble {
-    private record Bubble(String uuid, String text, String name, String color, double x, double y, double z, long born) {}
+    private record Bubble(String uuid, String text, String name, double x, double y, double z, long born) {}
 
     private static final List<Bubble> LIVE = new ArrayList<>();
-    private static final long LIFE = 4200L;      // ms na tela
+    private static final long LIFE = 4500L;      // ms na tela
     private static final int MAX = 4;
 
     private ChatBubble() {}
 
     public static void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(ChatBubble::draw);
+        ClientTickEvents.END_CLIENT_TICK.register(c -> LIVE.removeIf(b -> System.currentTimeMillis() - b.born() > LIFE));
     }
 
     /** Chamado pelo cliente quando o servidor manda uma fala de fundo. */
     public static void push(NpcIdlePayload p) {
         String[] parts = p.texto().split("\u0001", 3);
         String fala = parts.length > 0 ? parts[0] : p.texto();
-        String cor = parts.length > 1 ? parts[1] : "white";
         String nome = parts.length > 2 ? parts[2] : "";
         long now = System.currentTimeMillis();
         LIVE.removeIf(b -> b.uuid().equals(p.entityUuid()) && now - b.born() > 600);
         if (LIVE.size() >= MAX) LIVE.remove(0);
-        LIVE.add(new Bubble(p.entityUuid(), fala, nome, cor, p.x() + 0.5, p.y(), p.z() + 0.5, now));
+        LIVE.add(new Bubble(p.entityUuid(), fala, nome, p.x() + 0.5, p.y(), p.z() + 0.5, now));
     }
 
-    private static void draw(WorldRenderContext ctx) {
+    /** Desenha os baloes na tela (chamado pelo HUD mixin, depois do resto da HUD). */
+    public static void render(GuiGraphicsExtractor g) {
         if (LIVE.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null || mc.gui == null) return;
+        int w = mc.getWindow().getGuiScaledWidth();
+        int h = mc.getWindow().getGuiScaledHeight();
         long now = System.currentTimeMillis();
-        LIVE.removeIf(b -> now - b.born() > LIFE);
 
-        Vec3 cam = ctx.camera().getPosition();
-        MultiBufferSource.BufferSource buf = mc.renderBuffers().bufferSource();
-        Font font = mc.font;
-        float scale = 0.026f;
-
+        int slot = 0;
         for (Bubble b : LIVE) {
-            double x = b.x(), y = b.y(), z = b.z();
-            // segue o mob enquanto ele existir no mundo
-            for (var e : mc.level.entitiesForRendering()) {
-                if (e.getUUID().toString().equals(b.uuid())) {
-                    x = e.getX(); y = e.getY() + e.getBbHeight() + 0.55; z = e.getZ();
-                    break;
-                }
-            }
             long age = now - b.born();
-            float a = age > LIFE - 800 ? Math.max(0f, (LIFE - age) / 800f) : 1f;
-            int alpha = (int) (a * 255) << 24;
+            float a = age > LIFE - 900 ? Math.max(0f, (LIFE - age) / 900f) : 1f;
+            int alpha = ((int) (a * 255) << 24) | 0x00FFF0C0;
 
             String line = (b.name() == null || b.name().isEmpty()) ? b.text() : b.name() + ": " + b.text();
-            float px = (float) (x - cam.x), py = (float) (y - cam.y) + 0.30f, pz = (float) (z - cam.z);
-
-            ctx.matrixStack().pushPose();
-            ctx.matrixStack().translate(px, py, pz);
-            ctx.matrixStack().mulPose(ctx.camera().rotation());
-            ctx.matrixStack().scale(-scale, -scale, scale);
-            var mat = ctx.matrixStack().last().pose();
-            float w = font.width(line);
-            font.drawInBatch(Component.literal(line), -w / 2f, 0f, (alpha & 0xFF000000) | 0x00FFF0C0, false,
-                mat, buf, Font.DisplayMode.SEE_THROUGH, (alpha & 0xFF000000), 0xF000F0);
-            ctx.matrixStack().popPose();
+            int tw = mc.font.width(line);
+            // ancora: centro da tela + a direcao do NPC (projetada na horizontal)
+            double dx = b.x() - mc.player.getX(), dz = b.z() - mc.player.getZ();
+            double dist = Math.max(0.6, Math.sqrt(dx * dx + dz * dz));
+            double yaw = Math.toRadians(mc.player.getYRot());
+            double rx = dx * Math.cos(-yaw) - dz * Math.sin(-yaw);     // direita do jogador
+            double fz = dx * Math.sin(-yaw) + dz * Math.cos(-yaw);     // frente
+            if (fz < 0.2) { slot++; continue; }                         // atras do jogador: nao mostra
+            int sx = (int) (w / 2 + (rx / dist) * (w * 0.42));
+            int sy = (int) (h * 0.72 - (fz / dist) * 40 - slot * 14);
+            int bx = Math.max(4, Math.min(w - tw - 12, sx - tw / 2));
+            int by = Math.max(4, sy);
+            g.fill(bx - 3, by - 2, bx + tw + 3, by + 10, (int) (a * 190) << 24 | 0x00140C04);
+            g.text(mc.font, line, bx, by, alpha, true);
+            slot++;
         }
-        buf.endBatch();
     }
 }

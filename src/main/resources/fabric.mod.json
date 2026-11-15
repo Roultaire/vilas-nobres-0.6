@@ -23,10 +23,14 @@
     "java": ">=25",
     "fabric-api": "*"
   },
-  "suggests": {
-    "guardvillagers": "*"
-  },
+  "suggests": {},
   "recommends": {
     "mr_villager_guards": "*"
-  }
+  },
+  "mixins": [
+    {
+      "config": "nobrevilas.mixins.json",
+      "environment": "client"
+    }
+  ]
 }
