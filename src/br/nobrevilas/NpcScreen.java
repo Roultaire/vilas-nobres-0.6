@@ -390,8 +390,8 @@ public class NpcScreen extends Screen {
 
         // coluna da direita: opcoes (dentro da mesma janela, como na referencia)
         int nBtn = opts.size() + 1;
-        int btnH = 18, btnGap = 2;
-        int optW = Math.min(230, Math.max(150, tbW / 2));
+        int btnH = 17, btnGap = 1;
+        int optW = Math.min(200, Math.max(140, tbW / 2));
         int optX = px + pw - pad - optW;
 
         // texto da fala ocupa a coluna esquerda
@@ -406,7 +406,7 @@ public class NpcScreen extends Screen {
         int contentH = Math.max(txtH, optH + 18);
         contentH = Math.min(contentH, Math.max(80, this.height - 90));
 
-        int frameH = Math.max(contentH + pad * 2 + 6, portraitW > 0 ? 88 : 0);
+        int frameH = Math.max(contentH + 6, 96);
         ph = frameH + pad * 2;
         panelTop = this.height - ph - 14;                 // janela embaixo
         titleY = panelTop + pad + 2;
@@ -792,6 +792,73 @@ public class NpcScreen extends Screen {
         // numeração das páginas
         String pg = (pageNo * 2 + 1) + " · " + (pageNo * 2 + 2);
         g.text(this.font, pg, cx - this.font.width(pg) / 2, by2 + bhei - 22, 0xFFD8C089, false);
+    }
+
+    /** Botão do livro: pergaminho com borda dourada, desenhado à mão (sem widget do jogo). */
+    private void bookButton(GuiGraphicsExtractor g, int[] r, String label, int mx, int my) {
+        if (r == null) return;
+        boolean hover = hit(r, mx, my);
+        g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], hover ? 0xFF8C6A12 : 0xFF5A4410);
+        g.fill(r[0] + 1, r[1] + 1, r[0] + r[2] - 1, r[1] + r[3] - 1, hover ? 0xFFE8D7AE : 0xFFD8C089);
+        int tw = this.font.width(label);
+        g.text(this.font, label, r[0] + (r[2] - tw) / 2, r[1] + (r[3] - this.font.lineHeight) / 2 + 1,
+                hover ? 0xFF3A1E08 : 0xFF4A3A24, false);
+    }
+
+    private void drawTalkBody(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        int pad = 10;
+        int innerX = px, innerY = panelTop, innerW = pw, innerH = ph;
+
+        // ── janela estilo Minecraft: borda escura, bisel claro em cima, sombra embaixo ──
+        g.fill(innerX, innerY, innerX + innerW, innerY + innerH, 0xFF2B2B2B);
+        g.fill(innerX + 2, innerY + 2, innerX + innerW - 2, innerY + innerH - 2, 0xFFC6C6C6);
+        g.fill(innerX + 2, innerY + 2, innerX + innerW - 2, innerY + 4, 0xFFFFFFFF);       // brilho topo
+        g.fill(innerX + 2, innerY + innerH - 4, innerX + innerW - 2, innerY + innerH - 2, 0xFF8B8B8B);
+        g.fill(innerX + 2, innerY + 2, innerX + 4, innerY + innerH - 2, 0xFFE8E8E8);       // brilho esquerda
+
+        // ── retrato: quadro de madeira escura com o modelo 3D ──
+        int fx = innerX + pad, fy = innerY + pad;
+        int fw = portraitW + 12, fh = innerH - pad * 2;
+        if (portraitW > 0) {
+            g.fill(fx - 2, fy - 2, fx + fw + 2, fy + fh + 2, 0xFF3A3A3A);
+            g.fill(fx, fy, fx + fw, fy + fh, 0xFF8B8B8B);
+            g.fill(fx + 2, fy + 2, fx + fw - 2, fy + fh - 2, 0xFF1C1A17);
+            drawEntity3D(g, fx + 4, fy + 4, fx + fw - 4, fy + fh - 4, 42);
+        }
+
+        // ── nome grande + profissão em cinza, com linha divisória ──
+        int textX = tbX;
+        g.text(this.font, fit(name, tbW - 90), textX, titleY, 0xFF1A1A1A, false);
+        String r = fit(role, 86);
+        g.text(this.font, r, textX + tbW - this.font.width(r), titleY + 1, 0xFF707070, false);
+        g.fill(textX, titleY + this.font.lineHeight + 3, textX + tbW, titleY + this.font.lineHeight + 4, 0xFF8B8B8B);
+
+        // ── fala: histórico em cinza, atual em preto ──
+        int y = bodyY;
+        int colW = (optRects.isEmpty() ? tbX + tbW : optRects.get(0)[0] - 14) - tbX;
+        for (String l : histLines) { g.text(this.font, l, textX, y, 0xFF7A7A7A, false); y += lh; }
+        if (!histLines.isEmpty()) { g.fill(textX, y + 1, textX + colW, y + 2, 0xFFB0B0B0); y += 6; }
+        if (showTitle()) { g.text(this.font, fit(title, colW), textX, y, 0xFF5A4410, false); y += lh + 2; }
+        for (String l : bodyLines) { g.text(this.font, l, textX, y, 0xFF141414, false); y += lh; }
+
+        // ── opções: alinhadas à direita, numeradas; a do mouse ganha "»" e dourado ──
+        for (int i = 0; i < optRects.size(); i++) {
+            int[] b = optRects.get(i);
+            boolean close = i == closeIdx;
+            String label = close ? "Encerrar conversa" : opts.get(i)[0];
+            boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
+            String num = (i + 1) + " ";
+            String lab = fit(label, b[2] - 20);
+            int full = this.font.width(num + lab);
+            int lx = b[0] + b[2] - full;
+            int ly = b[1] + (b[3] - this.font.lineHeight) / 2;
+            if (hover) {
+                g.fill(lx - 4, ly - 2, b[0] + b[2], ly + this.font.lineHeight + 2, 0x22FFD97A);
+                g.text(this.font, "»", lx - 10, ly, 0xFFB06A10, false);
+            }
+            g.text(this.font, num, lx, ly, hover ? 0xFFB06A10 : 0xFF5A5A5A, false);
+            g.text(this.font, lab, lx + this.font.width(num), ly, hover ? 0xFFB06A10 : 0xFF222222, false);
+        }
     }
 
     /** Botão do livro: pergaminho com borda dourada, desenhado à mão (sem widget do jogo). */
