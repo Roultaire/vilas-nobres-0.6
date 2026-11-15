@@ -231,7 +231,11 @@ public class NpcScreen extends Screen {
 
     // layout
     private List<String> histLines = new ArrayList<>(), bodyLines = new ArrayList<>();
-    private final List<int[]> optRects = new ArrayList<>();        // x, y, w, h
+    private final List<int[]> optRects = new ArrayList<>();
+    /** true depois de clicar numa opcao: a tela so fecha quando o servidor mandar (nunca sozinha). */
+    private boolean holding;
+    private int bx, by2, bwid, bhei, leftX, rightX, pageWid, pageNo;
+    private List<String> titleLines = new ArrayList<>();
     private int px, py, pw, ph, panelTop, titleY, bodyY, boxH, tbX, tbW, lh, closeIdx;
     private int portraitW;
     private String icon = "";
@@ -279,6 +283,7 @@ public class NpcScreen extends Screen {
         HIST.add(entry);
         while (HIST.size() > 3) HIST.remove(0);
         hist = new ArrayList<>(HIST);
+        holding = false;              // resposta chegou: a tela volta a poder fechar
         init();                       // recalcula posicoes e botoes na mesma tela
     }
 
@@ -369,6 +374,7 @@ public class NpcScreen extends Screen {
     protected void init() {
         optRects.clear();
         lh = this.font.lineHeight + 2;
+        if (kind == Kind.GUIDE) { initBook(); return; }
         int t = 8;
         // largura: aproveita a tela, mas nunca passa de 560 (janela compacta)
         pw = Math.min(560, this.width - 24);
@@ -426,6 +432,47 @@ public class NpcScreen extends Screen {
         }
     }
 
+
+    // ───────────── LIVRO DO GUIA ─────────────
+    /** Layout do livro: duas páginas lado a lado, com setas e numeração. */
+    private void initBook() {
+        int bw = Math.min(560, this.width - 40);
+        int bh = Math.min(320, this.height - 60);
+        bx = (this.width - bw) / 2;
+        by2 = (this.height - bh) / 2;
+        bwid = bw;
+        bhei = bh;
+        int pageW = (bw - 28) / 2;
+        leftX = bx + 14;
+        rightX = bx + 14 + pageW + 8;
+        pageWid = pageW - 8;
+        int tby = by2 + bh - 34;
+        // setas de virar pagina + fechar
+        this.addRenderableWidget(Button.builder(Component.literal("<"), b -> page(-1)).bounds(bx + 6, tby, 20, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal(">"), b -> page(1)).bounds(bx + bw - 26, tby, 20, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Fechar"), b -> { holding = false; this.onClose(); }).bounds(bx + bw / 2 - 30, tby, 60, 20).build());
+        // categorias da pagina esquerda
+        int cy = by2 + 40;
+        int ch = 20;
+        for (String[] o : opts) {
+            final String cmd = o[1];
+            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(leftX + 6, cy, pageWid - 4, ch).build());
+            optRects.add(new int[]{leftX + 6, cy, pageWid - 4, ch});
+            cy += ch + 2;
+        }
+        closeIdx = -1;
+        bodyLines = wrap(body, pageWid - 16);
+        titleLines = wrap(title, pageWid - 16);
+    }
+
+    private void page(int d) { pageNo = Math.max(0, pageNo + d); }
+
+    @Override
+    public void onClose() {
+        if (holding) return;          // esperando a resposta do NPC: nao fecha
+        super.onClose();
+    }
+
     private void click(String cmd) {
         String c = cmd;
         if (c.contains("$(nome)")) {
@@ -433,7 +480,10 @@ public class NpcScreen extends Screen {
             if (v.length() < 3) return;
             c = c.replace("$(nome)", v);
         }
-        if (this.minecraft != null && this.minecraft.player != null) this.minecraft.player.connection.sendCommand(c);
+        if (this.minecraft == null || this.minecraft.player == null) return;
+        // segura a tela: opcao de conversa nunca fecha a tela nem deixa cair no guia
+        holding = true;
+        this.minecraft.player.connection.sendCommand(c);
     }
 
     @Override
@@ -636,8 +686,10 @@ public class NpcScreen extends Screen {
         // imagem de fundo da tela inteira (arte do castelo) + escurecimento para o texto respirar
         if (kind == Kind.GUIDE) {
             drawBackdrop(g);
-            g.fill(0, 0, this.width, this.height, 0x77000000);
-            drawTalkPanel(g);
+            g.fill(0, 0, this.width, this.height, 0x99000000);
+            super.extractRenderState(g, mouseX, mouseY, delta);
+            drawBook(g, mouseX, mouseY);
+            return;
         } else {
             g.fill(0, 0, this.width, this.height, 0x44000000);   // dialogo: so escurece o mundo
         }
@@ -645,82 +697,75 @@ public class NpcScreen extends Screen {
         int t = 8;
         int cx = px + pw / 2;
 
-        if (kind != Kind.GUIDE) { drawTalkBody(g, mouseX, mouseY); return; }
-
-        // moldura de pedra com musgo e rebites (so o guia)
-        stone(g, px, panelTop, pw, ph, 8, 16, 1);
-        g.fill(px + t, panelTop + t, px + pw - t, panelTop + ph - t, DARK);
-        g.outline(px + t, panelTop + t, pw - 2 * t, ph - 2 * t, GOLD_D);
-        for (int i = 0; i < 9; i++) {
-            int mx = px + (hash(i, 7, 3) % (pw - 10)), my = panelTop + (i % 2 == 0 ? 1 : ph - 4);
-            g.fill(mx, my, mx + 3, my + 2, MOSS);
-        }
-        for (int[] c : new int[][]{{px + 1, panelTop + 1}, {px + pw - 7, panelTop + 1}, {px + 1, panelTop + ph - 7}, {px + pw - 7, panelTop + ph - 7}}) {
-            g.fill(c[0], c[1], c[0] + 6, c[1] + 6, GOLD_D);
-            g.fill(c[0] + 1, c[1] + 1, c[0] + 5, c[1] + 5, GOLD);
-            g.fill(c[0] + 2, c[1] + 2, c[0] + 4, c[1] + 4, GOLD_L);
-        }
-
-        // estandartes e placa do nome
-        boolean castle = kind == Kind.GUIDE;
-        banner(g, px + t + 3, panelTop + 3, 22, 54, castle);
-        banner(g, px + pw - t - 25, panelTop + 3, 22, 54, castle);
-        int plateX = px + t + 32, plateW = pw - 2 * (t + 32);
-        goldBox(g, plateX, titleY, plateW, 36);
-        String n = fit(name, plateW - 16);
-        g.text(this.font, n, cx - this.font.width(n) / 2 + 1, titleY + 6, SHADOW | 0xFF000000, false);
-        g.text(this.font, n, cx - this.font.width(n) / 2, titleY + 5, skin().text(), false);
-        String r = fit("— " + role + " —", plateW - 16);
-        g.text(this.font, r, cx - this.font.width(r) / 2, titleY + 21, TEXT, false);
-
-        // ornamento superior
-        if (hasIcon) art(g, iconArt(), cx - 17, py - 1, 3);
-        else if (kind == Kind.GUIDE) art(g, BOOK, cx - 17, py - 1, 3);
-        else art(g, CROWN, cx - 11, py, 3);
-
-        // retrato + profissao
-        if (portraitW > 0) {
-            int ptx = px + t + 8;
-            goldBox(g, ptx, bodyY, portraitW, 88);
-            drawEntity3D(g, ptx + 3, bodyY + 3, ptx + portraitW - 3, bodyY + 85, 34);
-            goldBox(g, ptx, bodyY + 92, portraitW, 26);
-            g.text(this.font, "Profissão:", ptx + 6, bodyY + 96, DIM, false);
-            g.text(this.font, fit(profession(), portraitW - 12), ptx + 6, bodyY + 107, GOLD_L, false);
-        }
-
-        // caixa de fala
-        goldBox(g, tbX, bodyY, tbW, boxH);
-        int tx = tbX + 8;
-        int y = bodyY + 8;
-        if (kind == Kind.GUIDE) { art(g, BOOK, tbX + 8, bodyY + 8, 2); tx += 34; }
-        for (String l : histLines) { g.text(this.font, l, tx, y, DIM, false); y += lh; }
-        if (!histLines.isEmpty()) { g.fill(tx, y + 1, tbX + tbW - 8, y + 2, GOLD_D); y += 6; }
-        if (showTitle()) { g.text(this.font, title, tx, y, GOLD_L, false); y += lh + 2; }
-        for (String l : bodyLines) { g.text(this.font, l, tx, y, TEXT, false); y += lh; }
-
-        // botoes de pedra
-        for (int i = 0; i < optRects.size(); i++) {
-            int[] b = optRects.get(i);
-            boolean close = i == closeIdx;
-            String label = close ? "Encerrar conversa" : opts.get(i)[0];
-            boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
-            stone(g, b[0], b[1], b[2], b[3], 11, 22, 5 + i);
-            g.fill(b[0] + 2, b[1] + 2, b[0] + b[2] - 2, b[1] + b[3] - 2, hover ? 0x55FFE9A0 : 0x33000000);
-            g.outline(b[0], b[1], b[2], b[3], hover ? GOLD_L : MORTAR);
-            if (hover) g.outline(b[0] + 1, b[1] + 1, b[2] - 2, b[3] - 2, GOLD);
-            art(g, iconFor(label, close), b[0] + 8, b[1] + 5, 2);
-            String lab = fit(label, b[2] - 52);
-            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2 + 1, b[1] + 7, 0xFF000000, false);
-            g.text(this.font, lab, b[0] + (b[2] - this.font.width(lab)) / 2, b[1] + 6, TEXT, false);
-        }
-
-        // ornamento inferior
-        int by = panelTop + ph - 6;
-        g.fill(cx - 22, by - 1, cx + 22, by, GOLD_D);
-        for (int i = 0; i < 4; i++) g.fill(cx - 3 + i, by - 4 + i, cx + 3 - i, by - 3 + i, GOLD);
+        drawTalkBody(g, mouseX, mouseY);
     }
 
-    /** Conteudo do DIALOGO: retrato, pergaminho com a fala e botoes de madeira (nada de pedra). */
+
+    /** Livro aberto: capa, duas páginas de pergaminho, lombada, cantos e marcadores. */
+    private void drawBook(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        int cx = bx + bwid / 2;
+        // sombra
+        g.fill(bx + 6, by2 + 8, bx + bwid + 6, by2 + bhei + 8, 0x66000000);
+        // capa de couro
+        g.fill(bx, by2, bx + bwid, by2 + bhei, 0xFF4A2C18);
+        g.outline(bx, by2, bwid, bhei, 0xFF2A1709);
+        g.fill(bx + 2, by2 + 2, bx + bwid - 2, by2 + bhei - 2, 0xFF6B4023);
+        // cantos de metal
+        for (int[] c : new int[][]{{bx + 2, by2 + 2}, {bx + bwid - 10, by2 + 2}, {bx + 2, by2 + bhei - 10}, {bx + bwid - 10, by2 + bhei - 10}}) {
+            g.fill(c[0], c[1], c[0] + 8, c[1] + 8, 0xFF8C6A12);
+            g.fill(c[0] + 2, c[1] + 2, c[0] + 6, c[1] + 6, 0xFFD4A21F);
+        }
+        // páginas de pergaminho
+        int py0 = by2 + 8, ph0 = bhei - 16;
+        int lw = (bwid - 40) / 2;
+        int lx0 = bx + 14, rx0 = bx + bwid - 14 - lw;
+        g.fill(lx0, py0, lx0 + lw, py0 + ph0, 0xFFE8D7AE);
+        g.fill(rx0, py0, rx0 + lw, py0 + ph0, 0xFFE8D7AE);
+        // manchas de idade
+        for (int i = 0; i < 14; i++) {
+            int sx = lx0 + (hash(i, 3, 7) % Math.max(1, lw - 8));
+            int sy = py0 + (hash(i, 9, 5) % Math.max(1, ph0 - 8));
+            g.fill(sx, sy, sx + 3, sy + 2, 0x22A8894F);
+        }
+        // lombada central
+        g.fill(cx - 5, py0 - 4, cx + 5, py0 + ph0 + 4, 0xFF8C6A12);
+        g.fill(cx - 1, py0 - 4, cx + 1, py0 + ph0 + 4, 0xFF5A4410);
+        // marcador de fita
+        g.fill(cx - 14, py0 - 8, cx - 8, py0 + 40, 0xFF9E2222);
+
+        // título da página direita
+        int ty = py0 + 8;
+        for (String l : titleLines) { g.text(this.font, l, rx0 + 10, ty, 0xFF5A3A10, false); ty += lh; }
+        g.fill(rx0 + 10, ty + 2, rx0 + lw - 10, ty + 3, 0xFFB79A4E);
+        // conteúdo
+        int cy = ty + 8;
+        for (String l : bodyLines) {
+            if (cy > py0 + ph0 - 14) break;
+            g.text(this.font, l, rx0 + 10, cy, 0xFF2E2418, false);
+            cy += lh;
+        }
+        // índice na página esquerda
+        int iy = py0 + 8;
+        g.text(this.font, "Índice", lx0 + 10, iy, 0xFF5A3A10, false);
+        iy += lh + 2;
+        g.fill(lx0 + 10, iy, lx0 + lw - 10, iy + 1, 0xFFB79A4E);
+        iy += 6;
+        for (int i = 0; i < optRects.size(); i++) {
+            int[] b = optRects.get(i);
+            boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
+            String lab = fit(opts.get(i)[0], lw - 30);
+            int ly2 = b[1] + (b[3] - this.font.lineHeight) / 2;
+            if (hover) {
+                g.fill(lx0 + 6, b[1], lx0 + lw - 6, b[1] + b[3], 0x33B79A4E);
+                g.text(this.font, "»", lx0 + 8, ly2, 0xFF7A5210, false);
+            }
+            g.text(this.font, lab, lx0 + 20, ly2, hover ? 0xFF3A1E08 : 0xFF4A3A24, false);
+        }
+        // numeração e rodapé
+        String pg = (pageNo * 2 + 1) + " · " + (pageNo * 2 + 2);
+        g.text(this.font, pg, cx - this.font.width(pg) / 2, by2 + bhei - 20, 0xFFD8C089, false);
+    }
+
     private void drawTalkBody(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int pad = 10, t = 8;
         int innerX = px, innerY = panelTop, innerW = pw, innerH = ph;

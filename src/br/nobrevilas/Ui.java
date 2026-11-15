@@ -76,8 +76,15 @@ final class Ui {
             opts.append(b.label()).append('\u0001').append(b.cmd());
         }
         String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color + "\u0001" + spIcon;
+        // conversa de NPC sem UUID (opcao generica): mantem o NPC que ja esta na tela
+        String keepUuid = spEntityUuid;
+        if (keepUuid.isEmpty() && spIcon.isEmpty()) {
+            String prev = lastSent.get(p.getUUID());
+            if (prev != null && !prev.isEmpty()) keepUuid = prev;
+        }
+        spEntityUuid = keepUuid;
         // o NPC viaja em todo pacote: o cliente atualiza a MESMA tela e nunca fecha nem cai no guia
-        lastSent.put(p.getUUID(), spEntityUuid);
+        lastSent.put(p.getUUID(), keepUuid);
         ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), spEntityUuid));
     }
 
