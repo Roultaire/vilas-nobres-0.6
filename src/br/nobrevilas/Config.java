@@ -6,6 +6,7 @@ public class Config {
     public String guardEntity = "minecraft:skeleton";     // guarda do Villager Guards (esqueleto invisivel com equipamento)
     public String fallbackGuardEntity = "minecraft:iron_golem";
     public boolean useVillagerGuards = true;               // aldeoes da vila viram guardas do Villager Guards
+    public boolean idleChatter = false;                    // falas de fundo dos aldeoes (balao na tela)
     public String currencyItem = "minecraft:emerald";   // qualquer item (inclusive de outros mods): moeda do mundo
     public String beaconBase = "minecraft:iron_block";   // base da piramide do farol
     public boolean cheatsEnabled = true;                   // /vila admin (somente criativo/espectador)

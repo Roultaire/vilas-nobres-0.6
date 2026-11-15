@@ -81,6 +81,20 @@ public final class VillageManager {
                 try (var r = Files.newBufferedReader(cp)) {
                     Config c = GSON.fromJson(r, Config.class);
                     if (c != null) cfg = c;
+                    // config.json antigo nao conhece os campos novos: aplica os padroes que faltam e regrava
+                    boolean changed = false;
+                    if (c != null && !FabricLoader.getInstance().isModLoaded(c.guardModId) && Integrations.loaded("mr_villager_guards")) {
+                        cfg.guardModId = "mr_villager_guards";
+                        cfg.guardEntity = "minecraft:skeleton";
+                        cfg.useVillagerGuards = true;
+                        changed = true;
+                    }
+                    if (c != null && c.guardModId.startsWith("guardvillagers")) {
+                        cfg.guardModId = "mr_villager_guards";
+                        cfg.guardEntity = "minecraft:skeleton";
+                        changed = true;
+                    }
+                    if (changed) Files.writeString(cp, GSON.toJson(cfg));
                 }
             } else {
                 Files.writeString(cp, GSON.toJson(cfg));
@@ -130,6 +144,7 @@ public final class VillageManager {
      * flutuando/caindo depois da fala.
      */
     private long lastCaptainCheck = 0;
+    private long lastMilitiaCheck = 0;
 
     private void processTalking() {
         if (frozenUntil.isEmpty()) return;
@@ -175,6 +190,7 @@ public final class VillageManager {
 
     /** A cada ~12 s, um NPC perto do jogador diz alguma coisa (balao na tela de conversa). */
     private void processIdle() {
+        if (!cfg.idleChatter) return;                 // desligado por padrao: nao atrapalha o gameplay
         ServerLevel level = server.overworld();
         long now = level.getGameTime();
         if (now - lastIdle < 240) return;
@@ -187,6 +203,7 @@ public final class VillageManager {
             if (nearby.isEmpty()) continue;
             Entity who = nearby.get(idleRnd.nextInt(nearby.size()));
             if (frozenUntil.containsKey(who.getUUID())) continue;
+            if (who.getTags() != null && who.getTags().toString().contains("villager_guards")) continue;
             lastIdle = now;
             String u = who.getUUID().toString();
             if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p, NpcIdlePayload.TYPE)) continue;
@@ -663,6 +680,10 @@ public final class VillageManager {
                 if (v.buildVersion < BUILD_VERSION) continue;      // espera a migracao antes de construir
                 if (!v.lordSpawned && v.ownerUuid == null && v.markerBuilt && loaded) spawnLord(level, v);
                 if (!v.garrisonSpawned && v.markerBuilt && loaded) spawnGarrison(level, v);
+                else if (v.garrisonSpawned && loaded && !heavy && level.getGameTime() - lastMilitiaCheck > 400) {
+                    lastMilitiaCheck = level.getGameTime();
+                    convertVillagers(level, v);            // aldeoes novos tambem viram guardas
+                }
                 else if (v.garrisonSpawned && loaded && !heavy
                     && level.getGameTime() - lastCaptainCheck > 200) ensureCaptain(level, v);
                 if (!heavy && !v.castleBuilt && needsCastle(v) && loaded) {
