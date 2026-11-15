@@ -411,7 +411,7 @@ public final class VillageManager {
                 v.x - v.radius - 16, -64, v.z - v.radius - 16, v.x + v.radius + 16, 320, v.z + v.radius + 16),
                 en -> en.getType().toString().contains("villager") && !(en.getType().toString().contains("zombie")))) {
             if (converted >= 8) break;
-            if (!e.getTags().isEmpty() && e.getTags().contains("nv_garrison")) continue;
+            if (e.entityTags().contains("nv_garrison")) continue;
             String u = e.getUUID().toString();
             run("data merge entity " + u + " {Profession:\"minecraft:none\",PersistenceRequired:1b}");
             run("execute as " + u + " run summon " + guardEntity() + " ~ ~ ~ {Tags:[" + tags + "],PersistenceRequired:1b}");
