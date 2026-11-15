@@ -56,7 +56,7 @@ public class NpcScreen extends Screen {
     private String entityUuid;
     private List<String[]> opts = new ArrayList<>();
     private List<String> hist = new ArrayList<>();
-    private final Kind kind;
+    private Kind kind;
 
     // layout
     private List<String> histLines = new ArrayList<>(), bodyLines = new ArrayList<>();

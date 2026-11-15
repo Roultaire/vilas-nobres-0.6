@@ -35,9 +35,9 @@ public class NobreVilasClient implements ClientModInitializer {
             context.client().execute(() -> {
                 // "KEEP" = navegando entre as opcoes do mesmo NPC: nao troca nem reenvia o retrato
                 if (NpcTalkPayload.KEEP.equals(payload.entityUuid())) {
-                    if (context.client().screen instanceof NpcScreen s) s.update(payload);
+                    if (context.client().gui.screen() instanceof NpcScreen s) s.update(payload);
                     else context.client().setScreenAndShow(new NpcScreen(payload, null));
-                } else if (context.client().screen instanceof NpcScreen s && s.sameEntity(payload.entityUuid())) {
+                } else if (context.client().gui.screen() instanceof NpcScreen s && s.sameEntity(payload.entityUuid())) {
                     s.update(payload);
                 } else {
                     context.client().setScreenAndShow(new NpcScreen(payload, payload.entityUuid()));
@@ -47,7 +47,7 @@ public class NobreVilasClient implements ClientModInitializer {
         // despedida: fecha a tela somente se for o NPC em conversa
         ClientPlayNetworking.registerGlobalReceiver(NpcByePayload.TYPE, (payload, context) ->
             context.client().execute(() -> {
-                if (context.client().screen instanceof NpcScreen s && (payload.reason().isEmpty() || s.sameEntity(payload.reason())))
+                if (context.client().gui.screen() instanceof NpcScreen s && (payload.reason().isEmpty() || s.sameEntity(payload.reason())))
                     context.client().setScreenAndShow(null);
             }));
 
