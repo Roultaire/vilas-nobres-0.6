@@ -40,13 +40,7 @@ final class Ui {
 
     static void show(VillageManager m, ServerPlayer p, String title, String color, String body, String inputs, List<Btn> actions) {
         if (ServerPlayNetworking.canSend(p, NpcTalkPayload.TYPE)) {          // cliente com o mod: tela propria de conversa
-            StringBuilder opts = new StringBuilder();
-            for (Btn b : actions) {
-                if (opts.length() > 0) opts.append('\u0002');
-                opts.append(b.label()).append('\u0001').append(b.cmd());
-            }
-            String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color;
-            ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), spEntityUuid));
+            send(m, p, title, color, body, actions);
             return;
         }
         List<String> acts = new ArrayList<>();
@@ -66,6 +60,29 @@ final class Ui {
             for (String line : body.split("\n")) p.sendSystemMessage(Component.literal(line).withStyle(ChatFormatting.WHITE));
             for (Btn x : actions) p.sendSystemMessage(Component.literal(" › " + x.label() + "  →  /" + x.cmd()).withStyle(ChatFormatting.GRAY));
         }
+    }
+
+    /** Monta e envia a fala para a tela do cliente. Se o NPC e o mesmo, manda "KEEP" (a tela nao se recria). */
+    private static void send(VillageManager m, ServerPlayer p, String title, String color, String body, List<Btn> actions) {
+        StringBuilder opts = new StringBuilder();
+        for (Btn b : actions) {
+            if (opts.length() > 0) opts.append('\u0002');
+            opts.append(b.label()).append('\u0001').append(b.cmd());
+        }
+        String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color;
+        String uuid = lastSent.getOrDefault(p.getUUID(), "");
+        String marker = !uuid.isEmpty() && uuid.equals(spEntityUuid) ? NpcTalkPayload.KEEP : spEntityUuid;
+        lastSent.put(p.getUUID(), spEntityUuid);
+        ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), marker));
+    }
+
+    /** Ultimo NPC enviado a cada jogador (para a tela nao ser recriada a cada opcao). */
+    private static final Map<UUID, String> lastSent = new HashMap<>();
+
+    /** Fecha a tela de conversa do jogador (NPC se despediu). */
+    static void close(ServerPlayer p) {
+        lastSent.remove(p.getUUID());
+        if (ServerPlayNetworking.canSend(p, NpcByePayload.TYPE)) ServerPlayNetworking.send(p, new NpcByePayload(""));
     }
 
     static void show(VillageManager m, ServerPlayer p, String title, String color, String body, List<Btn> actions) {
@@ -134,7 +151,12 @@ final class Ui {
         VillageManager m = NobreVilas.manager();
         Entity e = null;
         try { e = m.server().overworld().getEntity(UUID.fromString(alvo)); } catch (IllegalArgumentException ignored) {}
-        if (e == null || e.distanceToSqr(p) > 144.0) { guide(m, p, "menu"); return 1; }
+        // sem entidade por perto: quando o assunto nao e "menu" e uma fala de fundo (vida da vila), mostra so o balao
+        if (e == null || e.distanceToSqr(p) > 144.0) {
+            if (!"menu".equals(topic) && "idle".equals(topic)) { idleTalk(m, p, alvo); return 1; }
+            guide(m, p, "menu");
+            return 1;
+        }
 
         String type = e.getType().toString();
         String lordVid = m.villageIdOfLord(e.getUUID());
@@ -171,6 +193,19 @@ final class Ui {
     }
 
     private static String talkCmd(String u, String topic) { return "vila ui falar " + u + " " + topic; }
+
+    // ───────────── vida da vila: fala de fundo ─────────────
+    private static final Random IDLE_RND = new Random();
+
+    /** Mostra a fala de fundo de um NPC que esta a vista do jogador (nao abre conversa, so o balao). */
+    private static void idleTalk(VillageManager m, ServerPlayer p, String uuid) {
+        String nome = "Aldeão da vila";
+        VillageData v = m.villageAt(p.getX(), p.getZ());
+        if (v != null) nome = "Aldeão de " + v.name;
+        speaker(nome, "Habitante", "yellow", uuid);
+        lastSent.remove(p.getUUID());          // garante que a tela seja criada com este NPC
+        show(m, p, nome, "yellow", VillageManager.IDLE_LINES[IDLE_RND.nextInt(VillageManager.IDLE_LINES.length)], List.of(b("‹ Fechar", "vila ui guia")));
+    }
 
     /** Nome amigavel do mob (ovelha, cavalo, vaca...). */
     private static String mobLabel(Entity e) {

@@ -34,6 +34,8 @@ public class NobreVilas implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> { if (manager != null) manager.tick(); });
         CommandRegistrationCallback.EVENT.register(VilaCommand::register);
         PayloadTypeRegistry.clientboundPlay().register(NpcTalkPayload.TYPE, NpcTalkPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(NpcByePayload.TYPE, NpcByePayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(NpcIdlePayload.TYPE, NpcIdlePayload.CODEC);
         Conquest.register();
         LOG.info("Nobre Vilas carregado.");
     }

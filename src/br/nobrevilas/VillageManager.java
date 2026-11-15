@@ -141,8 +141,10 @@ public final class VillageManager {
             UUID who = frozenWith.get(id);
             ServerPlayer pl = who == null ? null : server.getPlayerList().getPlayer(who);
             Entity ent = level.getEntity(id);
-            if (now >= en.getValue() || pl == null || ent == null || ent.distanceToSqr(pl) > 400.0) {
+            boolean timeout = now >= en.getValue();
+            if (timeout || pl == null || ent == null || ent.distanceToSqr(pl) > 400.0) {
                 unfreeze(id);
+                if (timeout && pl != null) Ui.close(pl);     // a conversa acabou: a tela fecha junto
                 frozenWith.remove(id);
                 it.remove();
             }
@@ -152,6 +154,45 @@ public final class VillageManager {
     /** Devolve a IA e o movimento normal do mob (usado no fim da conversa e no desligamento). */
     private void unfreeze(UUID id) {
         run("data merge entity " + id + " {NoAI:0b,NoGravity:0b}");
+    }
+
+    // ───────────── vida da vila: NPCs falam sozinhos ─────────────
+    /** Falas de fundo (sem interacao) para o jogador ouvir a vila respirando. */
+    static final String[] IDLE_LINES = {
+        "Dizem que o rei anda nervoso ultimamente...",
+        "A colheita deste ano vai ser boa, se a chuva ajudar.",
+        "Vi um soldado novo no portão hoje cedo.",
+        "Nunca vi tanto imposto. Nem em tempos de guerra.",
+        "Cuidado com os lobos depois do anoitecer.",
+        "A taverna tem cerva fresca. Vai passar por lá?",
+        "Meu filho quer entrar para a guarda quando crescer.",
+        "Esse forasteiro aí de novo...",
+        "O sino da torre tocou fora de hora ontem.",
+        "Já viu o preço do pão na praça? Um assalto!",
+    };
+    private long lastIdle = 0;
+    private final Random idleRnd = new Random();
+
+    /** A cada ~12 s, um NPC perto do jogador diz alguma coisa (balao na tela de conversa). */
+    private void processIdle() {
+        ServerLevel level = server.overworld();
+        long now = level.getGameTime();
+        if (now - lastIdle < 240) return;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            List<Entity> nearby = new ArrayList<>();
+            for (Entity e : level.getEntities((Entity) null, p.getBoundingBox().inflate(24.0), en -> {
+                String t = en.getType().toString();
+                return t.contains("villager") || t.contains("iron_golem");
+            })) nearby.add(e);
+            if (nearby.isEmpty()) continue;
+            Entity who = nearby.get(idleRnd.nextInt(nearby.size()));
+            if (frozenUntil.containsKey(who.getUUID())) continue;
+            lastIdle = now;
+            String u = who.getUUID().toString();
+            if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p, NpcIdlePayload.TYPE)) continue;
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, new NpcIdlePayload(u + "/idle"));
+            break;
+        }
     }
 
     public void shutdown() {
@@ -562,7 +603,7 @@ public final class VillageManager {
         if (ticks % 40 == 0) processPending();
         if (ticks % 100 == 0) processLords();
         if (ticks % 20 == 0) processPlayers();
-        if (ticks % 10 == 0) { processTracking(); processTalking(); }
+        if (ticks % 10 == 0) { processTracking(); processTalking(); processIdle(); }
         if (ticks % 200 == 0) processTaxes();
         if (ticks % Math.max(600, cfg.raidIntervalTicks) == 0) processWars();
         if (dirty && ticks % 6000 == 0) save();

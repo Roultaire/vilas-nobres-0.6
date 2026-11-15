@@ -24,8 +24,32 @@ public class NobreVilasClient implements ClientModInitializer {
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
             "Nobre Vilas: guia / falar com NPC", InputConstants.Type.KEYBOARD, InputConstants.KEY_N, CATEGORY));
 
-        ClientPlayNetworking.registerGlobalReceiver(NpcTalkPayload.TYPE,
-            (payload, context) -> context.client().setScreenAndShow(new NpcScreen(payload)));
+        // NPC "batendo papo" sozinho: pede ao servidor a fala dele (mesmo canal do NpcScreen)
+        ClientPlayNetworking.registerGlobalReceiver(NpcIdlePayload.TYPE, (payload, context) ->
+            context.client().execute(() -> {
+                if (context.client().player == null) return;
+                context.client().player.connection.sendCommand("vila ui falar " + payload.entityUuid());   // uuid+tema
+            }));
+
+        ClientPlayNetworking.registerGlobalReceiver(NpcTalkPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> {
+                // "KEEP" = navegando entre as opcoes do mesmo NPC: nao troca nem reenvia o retrato
+                if (NpcTalkPayload.KEEP.equals(payload.entityUuid())) {
+                    if (context.client().screen instanceof NpcScreen s) s.update(payload);
+                    else context.client().setScreenAndShow(new NpcScreen(payload, null));
+                } else if (context.client().screen instanceof NpcScreen s && s.sameEntity(payload.entityUuid())) {
+                    s.update(payload);
+                } else {
+                    context.client().setScreenAndShow(new NpcScreen(payload, payload.entityUuid()));
+                }
+            }));
+
+        // despedida: fecha a tela somente se for o NPC em conversa
+        ClientPlayNetworking.registerGlobalReceiver(NpcByePayload.TYPE, (payload, context) ->
+            context.client().execute(() -> {
+                if (context.client().screen instanceof NpcScreen s && (payload.reason().isEmpty() || s.sameEntity(payload.reason())))
+                    context.client().setScreenAndShow(null);
+            }));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) {

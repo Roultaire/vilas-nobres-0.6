@@ -11,10 +11,13 @@ import net.minecraft.resources.Identifier;
  * head    = nome \u0001 profissao \u0001 cor-do-nome \u0001 titulo \u0001 cor-do-titulo
  * body    = texto da fala (com \n)
  * options = rotulo \u0001 comando  (entradas separadas por \u0002)
+ * entityUuid = UUID do NPC (para desenhar o modelo 3D no retrato); "KEEP" mantem o NPC atual.
  */
 public record NpcTalkPayload(String head, String body, String options, String entityUuid) implements CustomPacketPayload {
     public static final Identifier ID = Identifier.fromNamespaceAndPath(NobreVilas.MOD_ID, "npc_talk");
     public static final CustomPacketPayload.Type<NpcTalkPayload> TYPE = new CustomPacketPayload.Type<>(ID);
+    /** valor especial: o cliente continua falando com o mesmo NPC */
+    public static final String KEEP = "KEEP";
     public static final StreamCodec<RegistryFriendlyByteBuf, NpcTalkPayload> CODEC = StreamCodec.composite(
         ByteBufCodecs.STRING_UTF8, NpcTalkPayload::head,
         ByteBufCodecs.STRING_UTF8, NpcTalkPayload::body,

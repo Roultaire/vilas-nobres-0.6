@@ -52,10 +52,10 @@ public class NpcScreen extends Screen {
     private static String lastKey = "";
     private static long lastTime;
 
-    private final String name, role, title, body;
-    private final String entityUuid;
-    private final List<String[]> opts = new ArrayList<>();
-    private final List<String> hist;
+    private String name, role, title, body;
+    private String entityUuid;
+    private List<String[]> opts = new ArrayList<>();
+    private List<String> hist = new ArrayList<>();
     private final Kind kind;
 
     // layout
@@ -66,13 +66,32 @@ public class NpcScreen extends Screen {
     private EditBox nameBox;
 
     public NpcScreen(NpcTalkPayload p) {
+        this(p, p.entityUuid());
+    }
+
+    public NpcScreen(NpcTalkPayload p, String entity) {
         super(Component.literal("Conversa"));
+        apply(p, entity);
+    }
+
+    /** true se a tela ja esta mostrando este NPC */
+    public boolean sameEntity(String uuid) {
+        return uuid != null && !uuid.isEmpty() && uuid.equals(entityUuid);
+    }
+
+    /** Troca o conteudo sem fechar a tela (navegacao entre opcoes / NPC que continua falando). */
+    public void update(NpcTalkPayload p) {
+        apply(p, NpcTalkPayload.KEEP.equals(p.entityUuid()) ? entityUuid : p.entityUuid());
+    }
+
+    private void apply(NpcTalkPayload p, String entity) {
         String[] h = p.head().split("\u0001", -1);
         name = h[0];
         role = h.length > 1 ? h[1] : "";
         title = h.length > 3 ? h[3] : "";
         body = p.body();
-        entityUuid = p.entityUuid();
+        entityUuid = entity == null ? "" : entity;
+        opts.clear();
         for (String e : p.options().split("\u0002", -1)) {
             if (e.isEmpty()) continue;
             String[] f = e.split("\u0001", -1);
@@ -88,6 +107,7 @@ public class NpcScreen extends Screen {
         if (entry.length() > 140) entry = entry.substring(0, 137) + "...";
         HIST.add(entry);
         while (HIST.size() > 3) HIST.remove(0);
+        init();
     }
 
     private Kind detectKind() {
