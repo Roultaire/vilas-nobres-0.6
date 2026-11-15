@@ -68,10 +68,14 @@ public class NpcScreen extends Screen {
     /** Cor de texto escolhida pelo tipo de tela. */
     private Skin skin() { return kind == Kind.GUIDE ? SKIN_GUIDE : SKIN_TALK; }
 
-    /** Textura esticada; se o arquivo nao existir, o desenho por cor continua (nao quebra nada). */
+    /** Texturas que ja falharam: nao tentamos de novo (evita desenhar lixo na tela). */
+    private static final java.util.Set<Identifier> TEX_BAD = new java.util.HashSet<>();
+
+    /** Textura esticada; se o arquivo nao existir, desliga essa textura e o desenho por cor assume. */
     private void tex(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h) {
-        if (id == null) return;
-        try { g.blit(id, x, y, w, h, 0f, 0f, 1f, 1f); } catch (Throwable ignored) { }
+        if (id == null || TEX_BAD.contains(id)) return;
+        try { g.blit(id, x, y, w, h, 0f, 0f, 1f, 1f); }
+        catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
     }
 
     /**
@@ -388,8 +392,16 @@ public class NpcScreen extends Screen {
     /** Arte de fundo: cobre a tela inteira mantendo a proporção (corta o excedente). */
     private void drawBackdrop(GuiGraphicsExtractor g) {
         Identifier bg = skin().backdrop();
-        if (bg == null) return;
-        try { g.blit(bg, 0, 0, this.width, this.height, 0f, 0f, 1f, 1f); } catch (Throwable ignored) { }
+        if (bg != null && !TEX_BAD.contains(bg)) {
+            int before = TEX_BAD.size();
+            tex(g, bg, 0, 0, this.width, this.height);
+            if (TEX_BAD.size() == before) return;         // desenhou a arte
+        }
+        // fallback: noite com brilho no centro (nunca fica chapado)
+        for (int y = 0; y < this.height; y += 4) {
+            int k = 255 - (int) (Math.abs(y - this.height / 2) * 120.0 / Math.max(1, this.height / 2));
+            g.fill(0, y, this.width, Math.min(this.height, y + 4), 0xFF000000 | (k / 6 << 16) | (k / 5 << 8) | (k / 3));
+        }
     }
 
     /** Painel do DIALOGO: tabua de madeira com rebites, pergaminho da fala e fita de pergaminho nos botoes. */
@@ -403,7 +415,7 @@ public class NpcScreen extends Screen {
         int sheetX = tbX - 2, sheetY = bodyY - 2;
         tex(g, sk.paper(), sheetX, sheetY, tbW + 4, boxH + 4);
         // placa do nome por textura
-        int plateWid = 256;
+        int plateWid = Math.max(120, Math.min(256, pw - 32));
         nine(g, sk.plate(), px + pw / 2 - plateWid / 2, panelTop + 4, plateWid, 32, sk.border());
         // veio da madeira e rebites (opcionais: so aparecem se nao houver textura de painel)
         if (sk.panel() == null) {
