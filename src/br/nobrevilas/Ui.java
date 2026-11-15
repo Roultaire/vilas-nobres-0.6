@@ -76,17 +76,13 @@ final class Ui {
             opts.append(b.label()).append('\u0001').append(b.cmd());
         }
         String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color + "\u0001" + spIcon;
-        String uuid = lastSent.getOrDefault(p.getUUID(), "");
-        String marker = keepNext ? NpcTalkPayload.KEEP : spEntityUuid;
-        keepNext = false;
+        // o NPC viaja em todo pacote: o cliente atualiza a MESMA tela e nunca fecha nem cai no guia
         lastSent.put(p.getUUID(), spEntityUuid);
-        ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), marker));
+        ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), spEntityUuid));
     }
 
     /** Ultimo NPC enviado a cada jogador (para a tela nao ser recriada a cada opcao). */
     private static final Map<UUID, String> lastSent = new HashMap<>();
-    /** proxima fala deve continuar na mesma tela (botao "bk") */
-    private static boolean keepNext = false;
 
     /** Fecha a tela de conversa do jogador (NPC se despediu). */
     static void close(ServerPlayer p) {
@@ -205,7 +201,6 @@ final class Ui {
             return 1;
         }
 
-        if (KEEP.equals(mode)) keepNext = true;    // continua na mesma tela
 
         String type = e.getType().toString();
         String lordVid = m.villageIdOfLord(e.getUUID());

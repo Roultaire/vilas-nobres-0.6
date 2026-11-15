@@ -111,6 +111,14 @@ public final class VillageManager {
             if (s.players != null) s.players.forEach((k, pdv) -> players.put(UUID.fromString(k), pdv));
             if (s.claims != null) claims.putAll(s.claims);
             NobreVilas.LOG.info("{} vilas carregadas.", villages.size());
+            // capital antiga (muro procedural): volta para a fila da muralha do kit do jogador
+            for (VillageData v : villages.values()) {
+                if (v.isCapital() && v.kitBuilt && !v.forceKit) {
+                    v.kitBuilt = false;
+                    v.forceKit = true;
+                    NobreVilas.LOG.info("Capital {}: muralha antiga detectada; muralha do kit reagendada.", v.name);
+                }
+            }
         } catch (Exception e) {
             NobreVilas.LOG.error("Falha ao ler villages.json", e);
         }

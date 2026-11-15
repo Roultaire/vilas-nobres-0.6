@@ -91,7 +91,31 @@ public class NpcScreen extends Screen {
 
     /** Troca o conteudo sem fechar a tela (navegacao entre opcoes / NPC que continua falando). */
     public void update(NpcTalkPayload p) {
-        apply(p, NpcTalkPayload.KEEP.equals(p.entityUuid()) ? entityUuid : p.entityUuid());
+        String novo = NpcTalkPayload.KEEP.equals(p.entityUuid()) || p.entityUuid() == null || p.entityUuid().isEmpty()
+            ? entityUuid : p.entityUuid();
+        if (sameEntity(novo)) applySoft(p);          // mesma tela: so o texto e as opcoes mudam
+        else apply(p, novo);                          // outro NPC: ai sim a tela se refaz por dentro
+    }
+
+    /** Atualiza fala/botoes sem destruir a tela (o jogador nao sai da conversa). */
+    private void applySoft(NpcTalkPayload p) {
+        String[] h = p.head().split("\u0001", -1);
+        String novoNome = h[0];
+        if (!novoNome.equals(name)) { apply(p, entityUuid); return; }   // trocou de NPC: refaz
+        body = p.body();
+        title = h.length > 3 ? h[3] : "";
+        opts.clear();
+        for (String e : p.options().split("\u0002", -1)) {
+            if (e.isEmpty()) continue;
+            String[] f = e.split("\u0001", -1);
+            opts.add(new String[]{f[0], f.length > 1 ? f[1] : ""});
+        }
+        String entry = (title.isEmpty() || title.equals(name) ? "" : title + " — ") + body.replace("\n", " ");
+        if (entry.length() > 140) entry = entry.substring(0, 137) + "...";
+        HIST.add(entry);
+        while (HIST.size() > 3) HIST.remove(0);
+        hist = new ArrayList<>(HIST);
+        init();                       // recalcula posicoes e botoes na mesma tela
     }
 
     private void apply(NpcTalkPayload p, String entity) {
@@ -423,8 +447,7 @@ public class NpcScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         // fundo escurecido: o guia usa o livro aberto; a conversa usa o painel de madeira novo
         g.fill(0, 0, this.width, this.height, 0x99000000);
-        if (kind == Kind.GUIDE) drawOpenBook(g);
-        else drawTalkPanel(g);
+        drawTalkPanel(g);                       // mesmo painel para guia e dialogo (sem livro de fundo)
         super.extractRenderState(g, mouseX, mouseY, delta);
         int t = 8;
         int cx = px + pw / 2;
