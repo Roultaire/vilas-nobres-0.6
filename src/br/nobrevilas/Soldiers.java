@@ -21,7 +21,7 @@ final class Soldiers {
     static void spawn(VillageManager m, ServerLevel l, int x, int z, int tier, String kind, String name, String tags, String extra, String uuid) {
         if (!l.hasChunkAt(new BlockPos(x, 64, z))) return;
         int y = l.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-        boolean vanilla = m.guardEntity().equals(m.cfg().fallbackGuardEntity);
+        // equipamento igual para guarda do mod ou golem: formato "equipment" (26.x)
         boolean captain = kind.equals("captain"), archer = kind.equals("archer");
         boolean horse = captain || tier >= 6;      // capitania e tiers altos vao montados
         String color = captain ? "gold" : archer ? "gray" : "white";
@@ -34,16 +34,7 @@ final class Soldiers {
         String head = (t >= 4 && t < 7) ? "diamond" : mat;            // elite: elmo de diamante
         String weapon = archer ? "crossbow" : t >= 9 ? "netherite_sword" : t >= 7 ? "diamond_sword" : "iron_sword";
         int hp = captain ? 80 : 40 + tier * 2;
-        if (!vanilla) {
-            // Guard Villagers (1.21.10): inventario estilo jogador — ArmorItems[pes,pernas,peito,cabeca] e HandItems[principal,secundaria]
-            nbt.append(",ArmorItems:[").append(it(mat + "_boots")).append(',').append(it(mat + "_leggings"))
-                .append(',').append(it(mat + "_chestplate")).append(',').append(it(head + "_helmet")).append("]")
-                .append(",HandItems:[").append(it(weapon)).append(',')
-                .append(archer ? "{id:\"minecraft:air\",count:1}" : it("shield")).append("]")
-                .append(",Health:").append(hp).append(".0f,attributes:[{id:\"minecraft:max_health\",base:").append(hp)
-                .append(".0d},{id:\"minecraft:armor\",base:").append(Math.min(20, 6 + tier)).append(".0d}]");
-        } else {
-            // golem de ferro (fallback vanilla): usa o formato de equipment
+        {
             nbt.append(",equipment:{head:").append(it(head + "_helmet"))
                 .append(",chest:").append(it(mat + "_chestplate"))
                 .append(",legs:").append(it(mat + "_leggings"))
@@ -51,6 +42,8 @@ final class Soldiers {
                 .append(",mainhand:").append(it(weapon));
             if (!archer) nbt.append(",offhand:").append(it("shield"));
             nbt.append("},drop_chances:{head:0.0f,chest:0.0f,legs:0.0f,feet:0.0f,mainhand:0.0f,offhand:0.0f}");
+            nbt.append(",Health:").append(hp).append(".0f,attributes:[{id:\"minecraft:max_health\",base:").append(hp)
+                .append(".0d},{id:\"minecraft:armor\",base:").append(Math.min(20, 6 + tier)).append(".0d}]");
         }
         if (horse)
             nbt.append(",Passenger:{id:\"minecraft:horse\",Tags:[\"nv_horse\",").append(tags).append("],")
