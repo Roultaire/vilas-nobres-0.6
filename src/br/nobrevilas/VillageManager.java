@@ -145,6 +145,7 @@ public final class VillageManager {
      */
     private long lastCaptainCheck = 0;
     private long lastMilitiaCheck = 0;
+    private final java.util.Map<String, Long> kitWait = new java.util.HashMap<>();
 
     private void processTalking() {
         if (frozenUntil.isEmpty()) return;
@@ -188,26 +189,47 @@ public final class VillageManager {
     private long lastIdle = 0;
     private final Random idleRnd = new Random();
 
-    /** A cada ~12 s, um NPC perto do jogador diz alguma coisa (balao na tela de conversa). */
+    /**
+     * Capital sem nenhuma tarefa de construcao do kit (estrutura faltando/ilegivel):
+     * devolve a muralha procedural para a vila nunca ficar sem muro.
+     */
+    private void kitFallback(ServerLevel level, VillageData v) {
+        if (!v.isCapital()) return;
+        long now = level.getGameTime();
+        Long last = kitWait.get(v.id);
+        if (last == null) { kitWait.put(v.id, now); return; }
+        if (now - last < 1200) return;                 // ~1 min de paciencia
+        kitWait.remove(v.id);
+        v.forceKit = false;
+        v.kitBuilt = true;                              // o kit falhou: volta ao muro procedural
+        dirty = true;
+        NobreVilas.LOG.warn("Capital {}: muralha do kit nao gerou tarefas; usando a muralha procedural.", v.name);
+        queueWall(level, v);
+    }
+
+    /** A cada ~14 s, um NPC perto do jogador solta uma fala em BALAO acima da cabeca (nunca abre tela). */
     private void processIdle() {
-        if (!cfg.idleChatter) return;                 // desligado por padrao: nao atrapalha o gameplay
+        if (!cfg.idleChatter) return;
         ServerLevel level = server.overworld();
         long now = level.getGameTime();
-        if (now - lastIdle < 240) return;
+        if (now - lastIdle < 280) return;
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             List<Entity> nearby = new ArrayList<>();
-            for (Entity e : level.getEntities((Entity) null, p.getBoundingBox().inflate(24.0), en -> {
+            for (Entity e : level.getEntities((Entity) null, p.getBoundingBox().inflate(20.0), en -> {
                 String t = en.getType().toString();
                 return t.contains("villager") || t.contains("iron_golem");
             })) nearby.add(e);
             if (nearby.isEmpty()) continue;
             Entity who = nearby.get(idleRnd.nextInt(nearby.size()));
             if (frozenUntil.containsKey(who.getUUID())) continue;
-            if (who.entityTags().toString().contains("nv_guards")) continue;
-            lastIdle = now;
-            String u = who.getUUID().toString();
+            if (who.entityTags().contains("nv_guards")) continue;
             if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p, NpcIdlePayload.TYPE)) continue;
-            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, new NpcIdlePayload(u + "/idle"));
+            lastIdle = now;
+            String fala = IDLE_LINES[idleRnd.nextInt(IDLE_LINES.length)];
+            String nome = who.hasCustomName() && who.getCustomName() != null ? who.getCustomName().getString() : "Aldeão";
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p,
+                new NpcIdlePayload(who.getUUID().toString(), fala + "\u0001yellow\u0001" + nome,
+                    (int) Math.floor(who.getX()), (int) Math.floor(who.getY()), (int) Math.floor(who.getZ())));
             break;
         }
     }
@@ -680,12 +702,13 @@ public final class VillageManager {
                 if (v.buildVersion < BUILD_VERSION) continue;      // espera a migracao antes de construir
                 if (!v.lordSpawned && v.ownerUuid == null && v.markerBuilt && loaded) spawnLord(level, v);
                 if (!v.garrisonSpawned && v.markerBuilt && loaded) spawnGarrison(level, v);
-                else if (v.garrisonSpawned && loaded && !heavy && level.getGameTime() - lastMilitiaCheck > 400) {
+                if (v.garrisonSpawned && loaded && !heavy && level.getGameTime() - lastMilitiaCheck > 400) {
                     lastMilitiaCheck = level.getGameTime();
                     convertVillagers(level, v);            // aldeoes novos tambem viram guardas
                 }
-                else if (v.garrisonSpawned && loaded && !heavy
-                    && level.getGameTime() - lastCaptainCheck > 200) ensureCaptain(level, v);
+                if (v.garrisonSpawned && loaded && !heavy && level.getGameTime() - lastCaptainCheck > 200) {
+                    ensureCaptain(level, v);
+                }
                 if (!heavy && !v.castleBuilt && needsCastle(v) && loaded) {
                     boolean ok = CastleBuilder.build(level, v, tierOf(v));
                     v.castleBuilt = true;
@@ -698,12 +721,14 @@ public final class VillageManager {
                     }
                     continue;
                 }
-                boolean kitWanted = v.isCapital() && (v.kitBuilt || v.forceKit || cfg.autoCapitalKit);
+                boolean kitWanted = v.isCapital() && cfg.autoCapitalKit && !v.kitBuilt;
+
                 if (!heavy && kitWanted && !v.kitBuilt && jobs.isEmpty() && near) {
                     var plan = CapitalBuilder.plan(level, v);
-                    if (plan == null) NobreVilas.LOG.warn("Capital {}: area ainda nao carregada; tentando de novo.", v.name);
+                    if (plan == null) { NobreVilas.LOG.warn("Capital {}: area ainda nao carregada; tentando de novo.", v.name); kitFallback(level, v); }
                     else NobreVilas.LOG.info("Capital {}: {} tarefas de construcao agendadas.", v.name, plan.size());
                     if (plan != null) {
+                        kitWait.remove(v.id);
                         jobs.addAll(plan);
                         jobs.add(() -> {
                             v.kitBuilt = true;
@@ -713,10 +738,10 @@ public final class VillageManager {
                             NobreVilas.LOG.info("Capital {} concluida.", v.name);
                         });
                         heavy = true;
-                    }
+                    } else kitWait.remove(v.id);
                     continue;
                 }
-                if (kitWanted) continue;                       // a capital usa o kit, nao a muralha procedural
+                if (kitWanted) { kitFallback(level, v); continue; }   // kit pendente: espera, mas nunca fica sem muro
                 int key = tierOf(v) * 10 + (v.isCapital() ? 1 : 0);
                 if (!heavy && v.wallKey != key && loaded) {
                     if (WallBuilder.build(level, v, tierOf(v), v.isCapital())) {

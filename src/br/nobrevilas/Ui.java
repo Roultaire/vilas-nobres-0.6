@@ -17,10 +17,12 @@ final class Ui {
     private Ui() {}
 
     // ───────────── construcao de dialogos ─────────────
-    record Btn(String label, String cmd, String tip, boolean dynamic) {}
+    record Btn(String label, String cmd, String tip, boolean dynamic, boolean keep) {}
 
-    static Btn b(String label, String cmd) { return new Btn(label, cmd, null, false); }
-    static Btn bt(String label, String cmd, String tip) { return new Btn(label, cmd, tip, false); }
+    static Btn b(String label, String cmd) { return new Btn(label, cmd, null, false, false); }
+    static Btn bt(String label, String cmd, String tip) { return new Btn(label, cmd, tip, false, false); }
+    /** Botao que continua a conversa com o MESMO NPC (a tela nao se recria). */
+    static Btn bk(String label, String cmd) { return new Btn(label, cmd, null, false, true); }
 
     static String esc(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
@@ -75,13 +77,16 @@ final class Ui {
         }
         String head = spName + "\u0001" + spRole + "\u0001" + spColor + "\u0001" + title + "\u0001" + color + "\u0001" + spIcon;
         String uuid = lastSent.getOrDefault(p.getUUID(), "");
-        String marker = !uuid.isEmpty() && uuid.equals(spEntityUuid) ? NpcTalkPayload.KEEP : spEntityUuid;
+        String marker = keepNext ? NpcTalkPayload.KEEP : spEntityUuid;
+        keepNext = false;
         lastSent.put(p.getUUID(), spEntityUuid);
         ServerPlayNetworking.send(p, new NpcTalkPayload(head, body, opts.toString(), marker));
     }
 
     /** Ultimo NPC enviado a cada jogador (para a tela nao ser recriada a cada opcao). */
     private static final Map<UUID, String> lastSent = new HashMap<>();
+    /** proxima fala deve continuar na mesma tela (botao "bk") */
+    private static boolean keepNext = false;
 
     /** Fecha a tela de conversa do jogador (NPC se despediu). */
     static void close(ServerPlayer p) {
@@ -180,23 +185,27 @@ final class Ui {
     }
 
     // ───────────── conversa com NPCs (N olhando para um NPC) ─────────────
-    static int talk(CommandSourceStack src, String alvo, String topic) throws CommandSyntaxException {
+    /** Modos de abertura da tela: nova (TALK) ou continuando o mesmo NPC (KEEP). */
+    static final String TALK = "talk", KEEP = "keep";
+
+    static int talk(CommandSourceStack src, String alvo, String mode, String topic) throws CommandSyntaxException {
         ServerPlayer p = src.getPlayerOrException();
         VillageManager m = NobreVilas.manager();
         Entity e = null;
         try { e = m.server().overworld().getEntity(UUID.fromString(alvo)); } catch (IllegalArgumentException ignored) {}
-        // sem entidade por perto: uma fala de fundo ("idle") ainda aparece; o resto volta ao guia
+        // NPC sumiu ou o jogador se afastou: fecha a conversa em vez de cair no guia (era o bug do "vai pro guia")
         if (e == null || e.distanceToSqr(p) > 144.0) {
-            if ("idle".equals(topic)) { idleTalk(m, p, alvo); return 1; }
-            guide(m, p, "menu");
+            close(p);
             return 1;
         }
-        // NPC que nao conversa (ovelha, cavalo...): so uma linha de sistema, sem abrir a tela
+        // NPC que nao conversa (ovelha, cavalo, guarda do Villager Guards...): so uma linha de sistema
         String tipo = e.getType().toString();
         if (!tipo.contains("villager") && !tipo.contains("iron_golem")) {
             p.sendSystemMessage(Component.literal("§7" + mobLabel(e) + " não fala com forasteiros."));
             return 1;
         }
+
+        if (KEEP.equals(mode)) keepNext = true;    // continua na mesma tela
 
         String type = e.getType().toString();
         String lordVid = m.villageIdOfLord(e.getUUID());
@@ -245,11 +254,26 @@ final class Ui {
     }
 
     /** Nome amigavel do mob (ovelha, cavalo, vaca...). */
+    private static final Map<String, String> MOB_NAMES = Map.ofEntries(
+        Map.entry("sheep", "Ovelha"), Map.entry("cow", "Vaca"), Map.entry("pig", "Porco"),
+        Map.entry("chicken", "Galinha"), Map.entry("horse", "Cavalo"), Map.entry("donkey", "Burro"),
+        Map.entry("mule", "Mula"), Map.entry("llama", "Lhama"), Map.entry("wolf", "Lobo"),
+        Map.entry("cat", "Gato"), Map.entry("ocelot", "Jaguatirica"), Map.entry("fox", "Raposa"),
+        Map.entry("rabbit", "Coelho"), Map.entry("parrot", "Papagaio"), Map.entry("bat", "Morcego"),
+        Map.entry("skeleton", "Esqueleto"), Map.entry("zombie", "Zumbi"), Map.entry("spider", "Aranha"),
+        Map.entry("creeper", "Creeper"), Map.entry("enderman", "Enderman"), Map.entry("slime", "Slime"),
+        Map.entry("wandering_trader", "Comerciante Viajante"), Map.entry("golem", "Golem"));
+
     private static String mobLabel(Entity e) {
         String t = e.getType().toString();
         int i = t.indexOf(':');
         if (i >= 0) t = t.substring(i + 1);
-        return t.replace('_', ' ');
+        // nome amigavel (o id interno aparecia cru na tela: "entity.minecraft.piglin")
+        if (t.contains(".")) t = t.substring(t.lastIndexOf('.') + 1);
+        String nice = MOB_NAMES.get(t);
+        if (nice != null) return nice;
+        t = t.replace('_', ' ');
+        return t.isEmpty() ? "Criatura" : Character.toUpperCase(t.charAt(0)) + t.substring(1);
     }
 
     private static String trader(VillageManager m, ServerPlayer p) {
@@ -328,7 +352,7 @@ final class Ui {
                     show(m, p, "Romper com o reino", "red",
                         "Você deixará o " + (pd.homeKingdom != null ? pd.homeKingdom : "reino") + " e fundará o seu. Todas as vilas do reino antigo marcharão contra você. Tome a capital para virar Imperador.\n\nEscolha o nome do novo reino:",
                         "{type:\"minecraft:text\",key:\"nome\",label:\"Nome do reino\",width:300,max_length:24,initial:\"\"}",
-                        List.of(new Btn("Proclamar o reino", "vila rebelar $(nome)", null, true), back));
+                        List.of(new Btn("Proclamar o reino", "vila rebelar $(nome)", null, true, true), back));
                 }
             }
             case "status" -> status(m, p, talkCmd(u, "menu"));

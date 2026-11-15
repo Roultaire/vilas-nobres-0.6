@@ -249,6 +249,42 @@ public class NpcScreen extends Screen {
     @Override
     public boolean isPauseScreen() { return false; }
 
+    // ───────────── livro aberto de fundo ─────────────
+    private static final int PARCH = 0xFFE8D5A9, PARCH_D = 0xFFCBB077, PARCH_S = 0xFFA88A55,
+        LEATHER = 0xFF6B3F1D, LEATHER_D = 0xFF4A2A11, RIBBON = 0xFF8E1F1F;
+
+    /** Livro aberto atras da conversa: capa, duas paginas de pergaminho, lombada e fitas. */
+    private void drawOpenBook(GuiGraphicsExtractor g) {
+        int bw = Math.min(this.width - 24, 560);
+        int bh = Math.min(this.height - 16, 340);
+        int bx = (this.width - bw) / 2, by = (this.height - bh) / 2;
+        int half = bw / 2, spine = 10;
+        // capa
+        g.fill(bx - 6, by - 6, bx + bw + 6, by + bh + 6, LEATHER_D);
+        g.fill(bx - 3, by - 3, bx + bw + 3, by + bh + 3, LEATHER);
+        g.outline(bx - 3, by - 3, bw + 6, bh + 6, 0xFF2A1708);
+        // paginas
+        g.fill(bx, by, bx + half - spine / 2, by + bh, PARCH);
+        g.fill(bx + half + spine / 2, by, bx + bw, by + bh, PARCH);
+        g.outline(bx, by, half - spine / 2, bh, PARCH_S);
+        g.outline(bx + half + spine / 2, by, bw - half - spine / 2, bh, PARCH_S);
+        // linhas de pauta nas bordas (disfarcadas de texto antigo)
+        for (int side = 0; side < 2; side++) {
+            int x0 = side == 0 ? bx + 10 : bx + half + spine / 2 + 10;
+            int x1 = side == 0 ? bx + half - spine / 2 - 10 : bx + bw - 10;
+            for (int y = by + 14; y < by + bh - 12; y += 9) {
+                if ((y / 9) % 5 == 0) continue;
+                g.fill(x0, y, x0 + (x1 - x0) * 2 / 3, y + 1, PARCH_D);
+            }
+        }
+        // lombada e dobra central
+        g.fill(bx + half - spine / 2, by, bx + half + spine / 2, by + bh, PARCH_D);
+        g.fill(bx + half - 1, by, bx + half + 1, by + bh, PARCH_S);
+        // fitas marcadoras
+        g.fill(bx + half - 14, by - 3, bx + half - 8, by + 26, RIBBON);
+        g.fill(bx + half + 8, by + bh - 26, bx + half + 14, by + bh + 3, RIBBON);
+    }
+
     // ───────────── desenho ─────────────
     /** Pixel art do icone pedido pelo servidor (guia). */
     private String[] iconArt() {
@@ -355,6 +391,9 @@ public class NpcScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        // fundo escurecido + livro aberto de fundo (a conversa acontece sobre as paginas)
+        g.fill(0, 0, this.width, this.height, 0x99000000);
+        drawOpenBook(g);
         super.extractRenderState(g, mouseX, mouseY, delta);
         int t = 8;
         int cx = px + pw / 2;

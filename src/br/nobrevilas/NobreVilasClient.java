@@ -21,15 +21,13 @@ public class NobreVilasClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ChatBubble.register();     // baloes de fala no mundo (acima da cabeca dos NPCs)
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
             "Nobre Vilas: guia / falar com NPC", InputConstants.Type.KEYBOARD, InputConstants.KEY_N, CATEGORY));
 
-        // NPC "batendo papo" sozinho: pede ao servidor a fala dele (mesmo canal do NpcScreen)
+        // NPC "batendo papo" sozinho: BALAO acima da cabeca, no mundo (nao abre tela nenhuma)
         ClientPlayNetworking.registerGlobalReceiver(NpcIdlePayload.TYPE, (payload, context) ->
-            context.client().execute(() -> {
-                if (context.client().player == null) return;
-                context.client().player.connection.sendCommand("vila ui falar " + payload.entityUuid());   // uuid+tema
-            }));
+            context.client().execute(() -> ChatBubble.push(payload)));
 
         ClientPlayNetworking.registerGlobalReceiver(NpcTalkPayload.TYPE, (payload, context) ->
             context.client().execute(() -> {
