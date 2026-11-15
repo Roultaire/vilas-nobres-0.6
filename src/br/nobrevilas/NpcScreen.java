@@ -96,17 +96,7 @@ public class NpcScreen extends Screen {
 
     private enum Kind { GUIDE, ROYAL, NOBLE, GUARD, TRADER, VILLAGER }
 
-    @Override
-    public boolean mouseClicked(double mx, double my, int button) {
-        clicking = true;
-        return super.mouseClicked(mx, my, button);
-    }
 
-    @Override
-    public boolean mouseReleased(double mx, double my, int button) {
-        clicking = false;
-        return super.mouseReleased(mx, my, button);
-    }
 
     // ───────────── paleta ─────────────
     private static final int MORTAR = 0xFF2B2720, DARK = 0xFF17130E, GOLD = 0xFFD4A21F, GOLD_D = 0xFF8C6A12, GOLD_L = 0xFFF2CF5A,
