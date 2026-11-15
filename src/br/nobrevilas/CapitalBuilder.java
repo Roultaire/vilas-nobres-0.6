@@ -57,11 +57,15 @@ final class CapitalBuilder {
     /** @return lista de tarefas, ou null se algum chunk da area ainda nao esta carregado. */
     static List<Runnable> plan(ServerLevel l, VillageData v) {
         int r = v.radius;
+        // medidas reais das pecas do kit
+        int tw = Math.max(1, StructureKit.size(l, "torre", Rotation.NONE)[0]);
+        int gw = Math.max(1, StructureKit.size(l, "muralha", Rotation.NONE)[0]);
+        int gh = Math.max(1, StructureKit.size(l, "muralha", Rotation.NONE)[2]);
         int k = 6;
-        while (11 + SEG * k < 2 * (r + 10) + 2 && k < 10) k++;
-        int p = 11 + SEG * k, half = p / 2;
+        while (2 * tw + (k - 1) * gh < 2 * (r + 10) + 2 && k < 12) k++;
+        int p = 2 * tw + (k - 1) * gh, half = p / 2;
         int allowed = Math.max(0, Math.min(24, half - r - 6));
-        int ext = half + allowed + TOWER + 4;
+        int ext = half + allowed + tw + 4;
         for (int dx = -ext; dx <= ext + 15; dx += 16)
             for (int dz = -ext; dz <= ext + 15; dz += 16)
                 if (!l.hasChunkAt(new BlockPos(v.x + Math.min(dx, ext), 64, v.z + Math.min(dz, ext)))) return null;
@@ -77,15 +81,17 @@ final class CapitalBuilder {
         int x0 = v.x + bx - half, z0 = v.z + bz - half;
 
         // anel de pecas no sentido horario: torre NO, norte, torre NE, leste, torre SE, sul (invertido), torre SO, oeste (invertido)
+        int th = tw;
+        int x1 = x0 + th - 1, z1 = z0 + th - 1;
         List<Inst> ring = new ArrayList<>();
-        ring.add(new Inst("torre", Rotation.COUNTERCLOCKWISE_90, x0, z0, TOWER, TOWER, -1, 0));
-        for (int j = 0; j < k; j++) ring.add(new Inst("muralha", Rotation.COUNTERCLOCKWISE_90, x0 + 12 + SEG * j, z0 + 4, SEG, 5, 0, j));
-        ring.add(new Inst("torre", Rotation.NONE, x0 + p, z0, TOWER, TOWER, -1, 0));
-        for (int j = 0; j < k; j++) ring.add(new Inst("muralha", Rotation.NONE, x0 + p + 4, z0 + 12 + SEG * j, 5, SEG, 1, j));
-        ring.add(new Inst("torre", Rotation.NONE, x0 + p, z0 + p, TOWER, TOWER, -1, 0));
-        for (int j = k - 1; j >= 0; j--) ring.add(new Inst("muralha", Rotation.COUNTERCLOCKWISE_90, x0 + 12 + SEG * j, z0 + p + 4, SEG, 5, 2, j));
-        ring.add(new Inst("torre", Rotation.CLOCKWISE_90, x0, z0 + p, TOWER, TOWER, -1, 0));
-        for (int j = k - 1; j >= 0; j--) ring.add(new Inst("muralha", Rotation.NONE, x0 + 4, z0 + 12 + SEG * j, 5, SEG, 3, j));
+        ring.add(new Inst("torre", Rotation.COUNTERCLOCKWISE_90, x0, z0, tw, tw, -1, 0));
+        for (int j = 0; j < k; j++) ring.add(new Inst("muralha", Rotation.COUNTERCLOCKWISE_90, x1 + 1 + gh * j, z0, gh, gw, 0, j));
+        ring.add(new Inst("torre", Rotation.NONE, x0 + p - th, z0, tw, tw, -1, 0));
+        for (int j = 0; j < k; j++) ring.add(new Inst("muralha", Rotation.NONE, x0 + p - th, z1 + 1 + gh * j, gw, gh, 1, j));
+        ring.add(new Inst("torre", Rotation.NONE, x0 + p - th, z0 + p - th, tw, tw, -1, 0));
+        for (int j = k - 1; j >= 0; j--) ring.add(new Inst("muralha", Rotation.COUNTERCLOCKWISE_90, x1 + 1 + gh * j, z0 + p - th, gh, gw, 2, j));
+        ring.add(new Inst("torre", Rotation.CLOCKWISE_90, x0, z0 + p - th, tw, tw, -1, 0));
+        for (int j = k - 1; j >= 0; j--) ring.add(new Inst("muralha", Rotation.NONE, x0, z1 + 1 + gh * j, gw, gh, 3, j));
         int m = ring.size();
 
         // portao: o do meio exato de cada lado (centralizado, nao escolhido pelo terreno)
@@ -150,13 +156,13 @@ final class CapitalBuilder {
     private static void approaches(ServerLevel l, Inst g, int floorY) {
         boolean alongX = g.rot() == Rotation.COUNTERCLOCKWISE_90;      // muralha ao longo de X: abertura atravessa Z
         if (alongX) {
-            int cx = g.minX() + 7;
-            WallBuilder.ramp(l, cx, g.minZ(), 0, -1, 1, 0, 1, floorY, 3);            // norte
-            WallBuilder.ramp(l, cx, g.minZ() + 4, 0, 1, 1, 0, 1, floorY, 3);        // sul
+            int cx = g.minX() + g.w() / 2;
+            WallBuilder.ramp(l, cx, g.minZ(), 0, -1, 1, 0, 1, floorY, 3);                       // norte
+            WallBuilder.ramp(l, cx, g.minZ() + g.d() - 1, 0, 1, 1, 0, 1, floorY, 3);           // sul
         } else {
-            int cz = g.minZ() + 7;
-            WallBuilder.ramp(l, g.minX(), cz, -1, 0, 0, 1, 1, floorY, 3);            // oeste
-            WallBuilder.ramp(l, g.minX() + 4, cz, 1, 0, 0, 1, 1, floorY, 3);        // leste
+            int cz = g.minZ() + g.d() / 2;
+            WallBuilder.ramp(l, g.minX(), cz, -1, 0, 0, 1, 1, floorY, 3);                       // oeste
+            WallBuilder.ramp(l, g.minX() + g.w() - 1, cz, 1, 0, 0, 1, 1, floorY, 3);           // leste
         }
     }
 }

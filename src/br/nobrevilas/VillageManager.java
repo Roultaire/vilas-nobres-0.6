@@ -124,6 +124,13 @@ public final class VillageManager {
         run("execute as " + id + " at @s run tp @s ~ ~ ~ facing entity " + p.getScoreboardName() + " eyes");
     }
 
+    /**
+     * Enquanto a conversa dura, o NPC fica parado (NoAI) e olhando o jogador. Ao terminar, a IA volta
+     * a ser ligada com seguranca: NoAI desligado e NoGravity limpo, para o mob nao ficar travado nem
+     * flutuando/caindo depois da fala.
+     */
+    private long lastCaptainCheck = 0;
+
     private void processTalking() {
         if (frozenUntil.isEmpty()) return;
         ServerLevel level = server.overworld();
@@ -135,15 +142,20 @@ public final class VillageManager {
             ServerPlayer pl = who == null ? null : server.getPlayerList().getPlayer(who);
             Entity ent = level.getEntity(id);
             if (now >= en.getValue() || pl == null || ent == null || ent.distanceToSqr(pl) > 400.0) {
-                run("data merge entity " + id + " {NoAI:0b}");
+                unfreeze(id);
                 frozenWith.remove(id);
                 it.remove();
             }
         }
     }
 
+    /** Devolve a IA e o movimento normal do mob (usado no fim da conversa e no desligamento). */
+    private void unfreeze(UUID id) {
+        run("data merge entity " + id + " {NoAI:0b,NoGravity:0b}");
+    }
+
     public void shutdown() {
-        for (UUID id : frozenUntil.keySet()) run("data merge entity " + id + " {NoAI:0b}");
+        for (UUID id : frozenUntil.keySet()) unfreeze(id);
         frozenUntil.clear();
         frozenWith.clear();
         save();
@@ -332,7 +344,7 @@ public final class VillageManager {
         long chi = cu.getMostSignificantBits(), clo = cu.getLeastSignificantBits();
         String cuuidNbt = "UUID:[I;" + (int) (chi >> 32) + "," + (int) chi + "," + (int) (clo >> 32) + "," + (int) clo + "],";
         v.captainUuid = cu.toString();
-        Soldiers.spawn(this, level, rx + 2, rz + 4, tier, "captain", cap, tags, cuuidNbt);
+        Soldiers.spawn(this, level, rx + 2, rz + 4, tier, "captain", cap, tags, cuuidNbt, cuuidNbt);
         for (int i = 0; i < count; i++) {
             boolean atGate = i % 2 == 0;
             int x = atGate ? v.x + ((i / 2) % 5 - 2) * 2 : rx + ((i / 2) % 7 - 3) * 2;
@@ -342,6 +354,36 @@ public final class VillageManager {
         }
         v.garrisonSpawned = true;
         dirty = true;
+    }
+
+    /** Se o capitao sumiu (morto, chunk perdido), a guarnicao e refeita inteira. */
+    private void ensureCaptain(ServerLevel level, VillageData v) {
+        lastCaptainCheck = level.getGameTime();
+        if (v.captainUuid == null || v.captainUuid.isEmpty()) return;
+        Entity e = null;
+        try { e = level.getEntity(UUID.fromString(v.captainUuid)); } catch (IllegalArgumentException ignored) {}
+        if (e != null) return;
+        NobreVilas.LOG.info("Capitao de {} sumiu; refazendo a guarnicao.", v.name);
+        run("kill @e[tag=nv_garrison,tag=nv_v_" + v.id + "]");
+        run("kill @e[tag=nv_horse,tag=nv_v_" + v.id + "]");
+        v.garrisonSpawned = false;
+        dirty = true;
+    }
+
+    /** Comando /vila socorro: refaz a guarnicao de todas as vilas carregadas. */
+    public int respawnGarrisons() {
+        int n = 0;
+        ServerLevel level = server.overworld();
+        for (VillageData v : villages.values()) {
+            if (!v.garrisonSpawned) continue;
+            run("kill @e[tag=nv_garrison,tag=nv_v_" + v.id + "]");
+            run("kill @e[tag=nv_horse,tag=nv_v_" + v.id + "]");
+            v.garrisonSpawned = false;
+            n++;
+        }
+        dirty = true;
+        NobreVilas.LOG.info("Guarnicoes refeitas: {}", n);
+        return n;
     }
 
     public String villageIdOfLord(UUID id) {
@@ -552,6 +594,8 @@ public final class VillageManager {
                 if (v.buildVersion < BUILD_VERSION) continue;      // espera a migracao antes de construir
                 if (!v.lordSpawned && v.ownerUuid == null && v.markerBuilt && loaded) spawnLord(level, v);
                 if (!v.garrisonSpawned && v.markerBuilt && loaded) spawnGarrison(level, v);
+                else if (v.garrisonSpawned && loaded && !heavy
+                    && level.getGameTime() - lastCaptainCheck > 200) ensureCaptain(level, v);
                 if (!heavy && !v.castleBuilt && needsCastle(v) && loaded) {
                     boolean ok = CastleBuilder.build(level, v, tierOf(v));
                     v.castleBuilt = true;
@@ -610,6 +654,7 @@ public final class VillageManager {
             spawnLord(level, v);
         }
         run("kill @e[tag=nv_garrison,tag=nv_v_" + v.id + "]");
+        run("kill @e[tag=nv_horse,tag=nv_v_" + v.id + "]");
         v.garrisonSpawned = false;
         v.buildVersion = BUILD_VERSION;
         v.wallKey = 0;

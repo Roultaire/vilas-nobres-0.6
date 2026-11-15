@@ -159,16 +159,26 @@ final class Ui {
             speaker("Aldeão de " + v.name, "Habitante · " + v.typeLabel(), "yellow", u);
             m.freeze(e, p);
             commoner(m, p, v, u, topic);
-        } else if (v != null) {
-            // qualquer outro mob da vila (animal, golem fora do servico, etc.): fala como morador
-            speaker(e.getName().getString(), "Morador de " + v.name, "yellow", u);
+        } else if (type.contains("iron_golem")) {
+            speaker("Golem de " + v.name, "Protetor da vila", "gray", u);
             m.freeze(e, p);
             commoner(m, p, v, u, topic);
-        } else guide(m, p, "menu");
+        } else {
+            // cavalos, ovelhas, porcos... nao conversam: fala nenhuma, nenhuma tela
+            p.sendSystemMessage(Component.literal("§7Este " + mobLabel(e) + " não fala com forasteiros."));
+        }
         return 1;
     }
 
     private static String talkCmd(String u, String topic) { return "vila ui falar " + u + " " + topic; }
+
+    /** Nome amigavel do mob (ovelha, cavalo, vaca...). */
+    private static String mobLabel(Entity e) {
+        String t = e.getType().toString();
+        int i = t.indexOf(':');
+        if (i >= 0) t = t.substring(i + 1);
+        return t.replace('_', ' ');
+    }
 
     private static String trader(VillageManager m, ServerPlayer p) {
         show(m, p, "Mercador viajante", "yellow",
