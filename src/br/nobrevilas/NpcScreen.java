@@ -378,9 +378,9 @@ public class NpcScreen extends Screen {
         if (kind == Kind.GUIDE) { initBook(); return; }
         int t = 8;
         // largura: aproveita a tela, mas nunca passa de 560 (janela compacta)
-        pw = Math.min(560, this.width - 24);
+        pw = Math.min(Math.max(420, this.width - 120), 820);
         px = (this.width - pw) / 2;
-        portraitW = kind == Kind.GUIDE ? 0 : 64;
+        portraitW = kind == Kind.GUIDE ? 0 : Math.min(96, Math.max(72, this.height / 6));
         hasIcon = !icon.isEmpty();
 
         int pad = 10;
@@ -391,7 +391,7 @@ public class NpcScreen extends Screen {
         // coluna da direita: opcoes (dentro da mesma janela, como na referencia)
         int nBtn = opts.size() + 1;
         int btnH = 17, btnGap = 1;
-        int optW = Math.min(200, Math.max(140, tbW / 2));
+        int optW = Math.min(300, Math.max(180, tbW / 2));
         int optX = px + pw - pad - optW;
 
         // texto da fala ocupa a coluna esquerda
@@ -823,13 +823,14 @@ public class NpcScreen extends Screen {
             g.fill(fx - 2, fy - 2, fx + fw + 2, fy + fh + 2, 0xFF3A3A3A);
             g.fill(fx, fy, fx + fw, fy + fh, 0xFF8B8B8B);
             g.fill(fx + 2, fy + 2, fx + fw - 2, fy + fh - 2, 0xFF1C1A17);
-            drawEntity3D(g, fx + 4, fy + 4, fx + fw - 4, fy + fh - 4, 42);
+            drawEntity3D(g, fx + 4, fy + 4, fx + fw - 4, fy + fh - 4, Math.max(48, fh - 12));
         }
 
         // ── nome grande + profissão em cinza, com linha divisória ──
         int textX = tbX;
-        g.text(this.font, fit(name, tbW - 90), textX, titleY, 0xFF1A1A1A, false);
-        String r = fit(role, 86);
+        int roleW = Math.min(240, tbW / 2);
+        g.text(this.font, fit(name, tbW - roleW - 12), textX, titleY, 0xFF1A1A1A, false);
+        String r = fit(role, roleW);
         g.text(this.font, r, textX + tbW - this.font.width(r), titleY + 1, 0xFF707070, false);
         g.fill(textX, titleY + this.font.lineHeight + 3, textX + tbW, titleY + this.font.lineHeight + 4, 0xFF8B8B8B);
 
