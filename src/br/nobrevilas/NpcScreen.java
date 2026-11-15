@@ -73,6 +73,7 @@ public class NpcScreen extends Screen {
     /** Tamanho real de cada PNG (lido do próprio arquivo) — base do 9-slice e do fundo. */
     private static final java.util.Map<Identifier, Integer> TEX_W = new java.util.HashMap<>();
     private static final java.util.Map<Identifier, Integer> TEX_H = new java.util.HashMap<>();
+    private static final java.util.Map<String, Integer> AVG = new java.util.HashMap<>();
 
     /** Textura esticada; se o arquivo nao existir, desliga essa textura e o desenho por cor assume. */
     private void tex(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h) {
@@ -150,8 +151,38 @@ public class NpcScreen extends Screen {
         int tw = TEX_W.getOrDefault(id, 32), th = TEX_H.getOrDefault(id, 32);
         int srcW = Math.max(1, Math.round((u1 - u0) * tw)), srcH = Math.max(1, Math.round((v1 - v0) * th));
         int srcX = Math.round(u0 * tw), srcY = Math.round(v0 * th);
-        try { g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, (float) srcX, (float) srcY, w, h, srcW, srcH, tw, th); }
-        catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
+        try {
+            // pinta o pedaco do PNG tal qual (nunca esticado)
+            g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, (float) srcX, (float) srcY, srcW, srcH, srcW, srcH, tw, th);
+            if (w != srcW || h != srcH) {                      // completa a sobra com o mesmo pixel
+                int c = avgColor(id, srcX, srcY, srcW, srcH);
+                g.fill(x, y, x + w, y + h, c);
+                g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, id, x, y, (float) srcX, (float) srcY, srcW, srcH, srcW, srcH, tw, th);
+            }
+        } catch (Throwable t) { TEX_BAD.add(id); NobreVilas.LOG.warn("Textura ausente: {}", id); }
+    }
+
+    /** Cor media de um pedaco do PNG (para completar sobras sem esticar). */
+    private static int avgColor(Identifier id, int sx, int sy, int sw, int sh) {
+        String k = id + "@" + sx + "," + sy + "," + sw + "," + sh;
+        Integer got = AVG.get(k);
+        if (got != null) return got;
+        int col = 0xFF8A8A8A;
+        try {
+            var res = net.minecraft.client.Minecraft.getInstance().getResourceManager()
+                    .getResource(Identifier.fromNamespaceAndPath(id.getNamespace(), "textures/" + id.getPath() + ".png"));
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(res.orElseThrow().open());
+            long r = 0, gg = 0, b = 0, n = 0;
+            for (int y = sy; y < Math.min(sy + sh, img.getHeight()); y += 2)
+                for (int x = sx; x < Math.min(sx + sw, img.getWidth()); x += 2) {
+                    int px = img.getRGB(x, y);
+                    if (((px >> 24) & 0xFF) < 8) continue;
+                    r += (px >> 16) & 0xFF; gg += (px >> 8) & 0xFF; b += px & 0xFF; n++;
+                }
+            if (n > 0) col = 0xFF000000 | ((int) (r / n) << 16) | ((int) (gg / n) << 8) | (int) (b / n);
+        } catch (Throwable ignored) { }
+        AVG.put(k, col);
+        return col;
     }
 
     private enum Kind { GUIDE, ROYAL, NOBLE, GUARD, TRADER, VILLAGER }
@@ -338,53 +369,57 @@ public class NpcScreen extends Screen {
     protected void init() {
         optRects.clear();
         lh = this.font.lineHeight + 2;
-        pw = Math.min(450, this.width - 20);
-        px = (this.width - pw) / 2;
         int t = 8;
-        int inner = pw - 2 * t - 16;
-        // retrato: modelo 3D quando ha NPC; guia (ou sem NPC) usa o icone de pixel art
-        portraitW = kind == Kind.GUIDE ? 0 : 76;
-        tbW = inner - (portraitW > 0 ? portraitW + 8 : 0);
+        // largura: aproveita a tela, mas nunca passa de 560 (janela compacta)
+        pw = Math.min(560, this.width - 24);
+        px = (this.width - pw) / 2;
+        portraitW = kind == Kind.GUIDE ? 0 : 64;
         hasIcon = !icon.isEmpty();
-        int iconPad = hasIcon ? 34 : 0;
-        int textW = tbW - 16 - iconPad;
 
+        int pad = 10;
+        int frameW = portraitW > 0 ? portraitW + pad * 2 : 0;     // quadro do retrato
+        tbX = px + frameW + pad;
+        tbW = px + pw - pad - tbX;
+
+        // coluna da direita: opcoes (dentro da mesma janela, como na referencia)
+        int nBtn = opts.size() + 1;
+        int btnH = 18, btnGap = 2;
+        int optW = Math.min(230, Math.max(150, tbW / 2));
+        int optX = px + pw - pad - optW;
+
+        // texto da fala ocupa a coluna esquerda
+        int textW = (optX - tbX) - 12;
         histLines = new ArrayList<>();
         for (String s : hist) histLines.addAll(wrap("› " + s, textW));
-        while (histLines.size() > 4) histLines.remove(0);
+        while (histLines.size() > 3) histLines.remove(0);
         bodyLines = wrap(body, textW);
 
-        int textBoxH = 12 + (histLines.isEmpty() ? 0 : histLines.size() * lh + 6) + (showTitle() ? lh + 2 : 0) + bodyLines.size() * lh + 10;
-        int maxBox = Math.max(60, this.height - 150);
-        boxH = kind == Kind.GUIDE ? Math.max(textBoxH, 44) : Math.max(textBoxH, 118);
-        if (boxH > maxBox) boxH = maxBox;         // fala longa: a caixa para de crescer (texto fica contido)
+        int txtH = 22 + (histLines.isEmpty() ? 0 : histLines.size() * lh + 4) + (showTitle() ? lh + 2 : 0) + bodyLines.size() * lh;
+        int optH = nBtn * (btnH + btnGap);
+        int contentH = Math.max(txtH, optH + 18);
+        contentH = Math.min(contentH, Math.max(80, this.height - 90));
 
-        boolean needBox = false;
-        for (String[] o : opts) if (o[1].contains("$(nome)")) needBox = true;
+        int frameH = Math.max(contentH + pad * 2 + 6, portraitW > 0 ? 88 : 0);
+        ph = frameH + pad * 2;
+        panelTop = this.height - ph - 14;                 // janela embaixo
+        titleY = panelTop + pad + 2;
+        bodyY = titleY + this.font.lineHeight + 8;
 
-        int nBtn = opts.size() + 1;
-        int btnH = 24, btnGap = 4;
-        int total = 12 + t + 36 + 8 + boxH + 10 + nBtn * (btnH + btnGap) + 6 + t + (needBox ? 26 : 0);
-        py = Math.max(2, (this.height - total) / 2);
-        panelTop = py + 12;
-        titleY = panelTop + t;
-        bodyY = titleY + 36 + 8;
-        tbX = px + t + 8 + (portraitW > 0 ? portraitW + 8 : 0);
-        int by = bodyY + boxH + 10;
-        int bx = px + t + 8;
+        int by = panelTop + pad + 20;
         for (String[] o : opts) {
             final String cmd = o[1];
-            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(bx, by, inner, btnH).build());
-            optRects.add(new int[]{bx, by, inner, btnH});
+            this.addRenderableWidget(Button.builder(Component.literal(o[0]), b -> click(cmd)).bounds(optX, by, optW, btnH).build());
+            optRects.add(new int[]{optX, by, optW, btnH});
             by += btnH + btnGap;
         }
         closeIdx = optRects.size();
-        this.addRenderableWidget(Button.builder(Component.literal("Encerrar conversa"), b -> this.onClose()).bounds(bx, by, inner, btnH).build());
-        optRects.add(new int[]{bx, by, inner, btnH});
-        by += btnH + btnGap;
-        ph = (by + 6 + t) - panelTop;
+        this.addRenderableWidget(Button.builder(Component.literal("Encerrar conversa"), b -> this.onClose()).bounds(optX, by, optW, btnH).build());
+        optRects.add(new int[]{optX, by, optW, btnH});
+
+        boolean needBox = false;
+        for (String[] o : opts) if (o[1].contains("$(nome)")) needBox = true;
         if (needBox) {
-            nameBox = new EditBox(this.font, px, panelTop + ph + 6, pw, 20, Component.literal("Nome do reino"));
+            nameBox = new EditBox(this.font, tbX, panelTop - 26, pw - pad * 2, 20, Component.literal("Nome do reino"));
             nameBox.setMaxLength(24);
             nameBox.setHint(Component.literal("Nome do novo reino"));
             this.addRenderableWidget(nameBox);
@@ -599,9 +634,13 @@ public class NpcScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         // imagem de fundo da tela inteira (arte do castelo) + escurecimento para o texto respirar
-        drawBackdrop(g);
-        g.fill(0, 0, this.width, this.height, kind == Kind.GUIDE ? 0x77000000 : 0x55000000);
-        drawTalkPanel(g);
+        if (kind == Kind.GUIDE) {
+            drawBackdrop(g);
+            g.fill(0, 0, this.width, this.height, 0x77000000);
+            drawTalkPanel(g);
+        } else {
+            g.fill(0, 0, this.width, this.height, 0x44000000);   // dialogo: so escurece o mundo
+        }
         super.extractRenderState(g, mouseX, mouseY, delta);
         int t = 8;
         int cx = px + pw / 2;
@@ -683,54 +722,62 @@ public class NpcScreen extends Screen {
 
     /** Conteudo do DIALOGO: retrato, pergaminho com a fala e botoes de madeira (nada de pedra). */
     private void drawTalkBody(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        int t = 8, cx = px + pw / 2;
-        int plateX = px + pw / 2 - 128, plateY = panelTop + 4, plateW = 256;
-        String n = fit(name, plateW - 16);
-        g.text(this.font, n, cx - this.font.width(n) / 2 + 1, plateY + 7, 0xFF3A2611, false);
-        g.text(this.font, n, cx - this.font.width(n) / 2, plateY + 6, 0xFFFBEFC9, false);
-        String r = fit("— " + role + " —", plateW - 16);
-        g.text(this.font, r, cx - this.font.width(r) / 2, plateY + 20, 0xFFE6CF9E, false);
-        if (hasIcon) art(g, iconArt(), cx - 17, py - 1, 3);
-
-        // retrato em moldura de latão
-        if (portraitW > 0) {
-            int ptx = px + t + 8;
-            g.fill(ptx - 1, bodyY - 1, ptx + portraitW + 1, bodyY + 89, BRASS_D);
-            g.fill(ptx, bodyY, ptx + portraitW, bodyY + 88, 0xFF241B10);
-            drawEntity3D(g, ptx + 3, bodyY + 3, ptx + portraitW - 3, bodyY + 85, 34);
-            g.fill(ptx, bodyY + 92, ptx + portraitW, bodyY + 118, W_OAK_D);
-            g.text(this.font, "Profissão:", ptx + 6, bodyY + 96, 0xFFD8C089, false);
-            g.text(this.font, fit(profession(), portraitW - 12), ptx + 6, bodyY + 107, 0xFFFBEFC9, false);
+        int pad = 10, t = 8;
+        int innerX = px, innerY = panelTop, innerW = pw, innerH = ph;
+        // janela cinza-claro do Minecraft com borda dupla (referencia)
+        g.fill(innerX, innerY, innerX + innerW, innerY + innerH, 0xFFC6C6C6);
+        g.fill(innerX + 1, innerY + 1, innerX + innerW - 1, innerY + innerH - 1, 0xFFDDDDDD);
+        g.outline(innerX, innerY, innerW, innerH, 0xFF3A3A3A);
+        g.outline(innerX + 2, innerY + 2, innerW - 4, innerH - 4, 0xFF8A8A8A);
+        // cantos em metal envelhecido
+        for (int[] c : new int[][]{{innerX + 1, innerY + 1}, {innerX + innerW - 7, innerY + 1},
+                                   {innerX + 1, innerY + innerH - 7}, {innerX + innerW - 7, innerY + innerH - 7}}) {
+            g.fill(c[0], c[1], c[0] + 6, c[1] + 6, 0xFF6E5A2E);
+            g.fill(c[0] + 1, c[1] + 1, c[0] + 5, c[1] + 5, 0xFFB79A4E);
         }
 
-        // pergaminho da fala (texto escuro sobre papel)
-        int tx = tbX + 10;
-        int y = bodyY + 8;
-        int cDim = skin().paper() != null ? 0xFF8A7854 : COL_DIM;
-        int cInk = skin().paper() != null ? INK : COL_TEXT;
-        int cTitle = skin().paper() != null ? 0xFF7A5210 : COL_TITLE;
-        for (String l : histLines) { g.text(this.font, l, tx, y, cDim, false); y += lh; }
-        if (!histLines.isEmpty()) { g.fill(tx, y + 1, tbX + tbW - 10, y + 2, PAPER_D); y += 6; }
-        if (showTitle()) { g.text(this.font, title, tx, y, cTitle, false); y += lh + 2; }
-        for (String l : bodyLines) { g.text(this.font, l, tx, y, cInk, false); y += lh; }
+        // retrato do NPC a esquerda, dentro de um quadro
+        if (portraitW > 0) {
+            int fw = portraitW + pad * 2 - 4;
+            int fx = innerX + 4, fy = innerY + 4;
+            int fh = Math.min(innerH - 8, Math.max(88, innerH - 8));
+            g.fill(fx, fy, fx + fw, fy + fh, 0xFF8A8A8A);
+            g.fill(fx + 2, fy + 2, fx + fw - 2, fy + fh - 2, 0xFF23201A);
+            drawEntity3D(g, fx + 4, fy + 4, fx + fw - 4, fy + fh - 4, 40);
+        }
 
-        // botoes: tabua com borda de latao
+        // nome em destaque + linha divisoria
+        String n = fit(name, tbW);
+        g.text(this.font, n, tbX, titleY, 0xFF2A2A2A, false);
+        g.fill(tbX, titleY + this.font.lineHeight + 2, tbX + tbW, titleY + this.font.lineHeight + 3, 0xFF6E6E6E);
+        String r = fit(role, tbW);
+        g.text(this.font, r, tbX + this.font.width(n) + 8, titleY, 0xFF7A5A18, false);
+
+        // fala (tinta escura sobre o cinza)
+        int y = bodyY;
+        int colLeft = tbX;
+        int colW = (optRects.isEmpty() ? tbX + tbW : optRects.get(0)[0] - 12) - tbX;
+        for (String l : histLines) { g.text(this.font, l, colLeft, y, 0xFF6E6E6E, false); y += lh; }
+        if (!histLines.isEmpty()) { g.fill(colLeft, y + 1, colLeft + colW, y + 2, 0xFFA8A8A8); y += 5; }
+        if (showTitle()) { g.text(this.font, fit(title, colW), colLeft, y, 0xFF7A5A18, false); y += lh + 2; }
+        for (String l : bodyLines) { g.text(this.font, l, colLeft, y, 0xFF1E1E1E, false); y += lh; }
+
+        // opcoes: texto puro, com "»" na selecionada (como na referencia)
         for (int i = 0; i < optRects.size(); i++) {
             int[] b = optRects.get(i);
             boolean close = i == closeIdx;
             String label = close ? "Encerrar conversa" : opts.get(i)[0];
             boolean hover = mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
-            Skin sk = skin();
-            boolean down = hover && this.clicking;
-            g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], hover ? W_OAK_L : W_OAK);       // base de cor
-            nine(g, down ? sk.buttonDown() : hover ? sk.buttonHover() : sk.button(), b[0], b[1], b[2], b[3], sk.border());
-            if (!hover) g.outline(b[0], b[1], b[2], b[3], W_OAK_D);
-            art(g, iconFor(label, close), b[0] + 8, b[1] + 5, 2);
-            String lab = fit(label, b[2] - 52);
-            int lx = b[0] + (b[2] - this.font.width(lab)) / 2;
+            String num = (i + 1) + " ";
+            String lab = fit(label, b[2] - 16);
+            int lx = b[0] + (b[2] - this.font.width(num + lab)) / 2;
             int ly = b[1] + (b[3] - this.font.lineHeight) / 2;
-            g.text(this.font, lab, lx + 1, ly + 1, 0xFF1A1208, false);                       // sombra
-            g.text(this.font, lab, lx, ly, hover ? 0xFFFFE9A8 : 0xFFF3E7C8, false);          // texto
+            if (hover) {
+                g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], 0x33000000);
+                g.text(this.font, "»", lx - 9, ly, 0xFFB06A10, false);
+            }
+            g.text(this.font, num, lx, ly, hover ? 0xFFB06A10 : 0xFF5A5A5A, false);
+            g.text(this.font, lab, lx + this.font.width(num), ly, hover ? 0xFFB06A10 : 0xFF2E2E2E, false);
         }
     }
 }
