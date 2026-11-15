@@ -284,11 +284,11 @@ final class Ui {
 
     private static String lordGreeting(int grade) {
         return switch (grade) {
-            case 2 -> "Ah, um rosto amigo nesta terra. Meu povo fala bem de você. Em que posso servir?"
-            case 1 -> "Bem-vindo. A justiça do meu reinado é conhecida. O que deseja?"
-            case -1 -> "Você tem o hábito de levantar a mão contra a minha coroa. Cuidado por onde anda."
-            case -2 -> "Você ousa aparecer diante de mim? Eu, que o povo tanto odeia... por sua causa. Vá, antes que eu perca a paciência."
-            default -> "Um viajante em minha corte. Diga o que quer."
+            case 2 -> "Ah, um rosto amigo nesta terra. Meu povo fala bem de você. Em que posso servir?";
+            case 1 -> "Bem-vindo. A justiça do meu reinado é conhecida. O que deseja?";
+            case -1 -> "Você tem o hábito de levantar a mão contra a minha coroa. Cuidado por onde anda.";
+            case -2 -> "Você ousa aparecer diante de mim? Eu, que o povo tanto odeia... por sua causa. Vá, antes que eu perca a paciência.";
+            default -> "Um viajante em minha corte. Diga o que quer.";
         };
     }
 
