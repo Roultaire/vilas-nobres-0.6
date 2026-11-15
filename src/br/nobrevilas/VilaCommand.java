@@ -61,7 +61,7 @@ final class VilaCommand {
                             int bar = a.indexOf('/');
                             return bar < 0 ? Ui.talk(c.getSource(), a, Ui.KEEP, "menu")
                                            : Ui.talk(c.getSource(), a.substring(0, bar), Ui.KEEP, a.substring(bar + 1));
-                        })))
+                        }))))
             .then(Commands.literal("admin").requires(Admin::allowed)
                 .then(Commands.literal("subir").executes(c -> Admin.adjust(c.getSource(), 1))
                     .then(Commands.argument("n", IntegerArgumentType.integer(1, 10))
